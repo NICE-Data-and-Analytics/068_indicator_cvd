@@ -5,8 +5,9 @@ SHOW TABLES;
 /* --------------------------------------------------------------------------------------------------------------- */
 
 -- medcode dictionary
+DROP TABLE IF EXISTS medcodeid_aurum_202312;
 
-CREATE TABLE IF NOT EXISTS medcodeid_aurum_202312 (
+CREATE TABLE medcodeid_aurum_202312 (
 	medcodeid VARCHAR(18) PRIMARY KEY,
     observations BIGINT,
     original_read_code VARCHAR(19),
@@ -41,3 +42,41 @@ SET
 SELECT * FROM medcodeid_aurum_202312 LIMIT 10;
 
 SELECT COUNT(*) FROM medcodeid_aurum_202312;
+
+/* --------------------------------------------------------------------------------------------------------------- */
+
+-- Code selection - INCOMPLETE
+
+DROP TABLE IF EXISTS p068_codes;
+
+CREATE TABLE p068_codes (
+	cluster_id VARCHAR(25),
+    cluster_description VARCHAR(240),
+	medcodeid VARCHAR(18),
+    term VARCHAR(240),
+	include VARCHAR(25),
+    category VARCHAR(50)
+);
+
+DESCRIBE p068_codes;
+
+	-- 1 file
+    -- NULLIF to help read null values
+LOAD DATA LOCAL INFILE 'C:/Users/Public/Documents/068_indicator_cvd/codes/tia_cprd_plus.txt'
+INTO TABLE p068_codes 
+FIELDS TERMINATED BY ' '
+ENCLOSED BY '"'
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS 
+(@cluster_id, @cluster_description, @dummy, @dummy, @dummy, @dummy, @medcodeid, @dummy, @dummy, @dummy, @term, @dummy, @dummy, @dummy, @include, @dummy, @category) 
+SET
+	cluster_id = NULLIF(@cluster_id,''), 
+    cluster_description = NULLIF(@cluster_description,''),  
+    medcodeid = NULLIF(@medcodeid,''), 
+    term = NULLIF(@term,''), 
+    include = NULLIF(@include,''),  
+    category = NULLIF(@category,'');
+
+SELECT * FROM p068_codes LIMIT 10;
+
+SELECT COUNT(*) FROM p068_codes;

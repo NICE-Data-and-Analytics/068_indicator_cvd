@@ -1,0 +1,12 @@
+med_code_id observations original_read_code cleansed_read_code term snomed_code snomed_ct_description_id release emis_code_category_id include comments category
+1168281000000114 5000000 8BAg 8BAg.00 "NHS Health Check completed" 523221000000100 1168281000000114 NA 32 y NA "NHS health check"
+1161021000000112 600000 6B5 6B5..00 "NHS Health Check programme" 519961000000106 1161021000000112 NA 1 y NA "NHS health check"
+1728791000006113 200000 EMISNQNH7 NA "NHS Health check completed by practice" 1728791000006109 1728791000006113 NA 32 y NA "NHS health check"
+2180781000000117 200000 8BAg0 8BAg000 "NHS Health Check completed by third party" 840391000000101 2180781000000117 NA 32 y NA "NHS health check"
+2612211000000115 200000 8CV9 NA "NHS Health Check commenced" 1034771000000106 2612211000000115 NA 32 y NA "NHS health check"
+1948791000006116 100000 EMISNQNH16 NA "NHS Health Check care plan" 1948791000006100 1948791000006116 NA 32 y NA "NHS health check"
+1728811000006112 10000 EMISNQNH9 NA "NHS Health check completed by outside agency" 1728811000006108 1728811000006112 NA 32 y NA "NHS health check"
+1728781000006110 8000 EMISNQNH6 NA "NHS Health check completed" 1728781000006106 1728781000006110 NA 32 y NA "NHS health check"
+1728801000006114 5000 EMISNQNH8 NA "NHS Health check completed by pharmacist" 1728801000006105 1728801000006114 NA 32 y NA "NHS health check"
+1959151000006119 300 EMISNQHE165 NA "Heart Age study: NHS Health Check completed following opportunistic invitation" 1959151000006103 1959151000006119 NA 32 y NA "NHS health check"
+8427961000006119 30 ^ESCTNH842796 NA "NHS Health Check completed under NHS Healthy Workplace Programme" 1053551000000105 2651701000000112 NA 31 y NA "NHS health check"
