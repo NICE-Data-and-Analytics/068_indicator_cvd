@@ -1,0 +1,197 @@
+---
+title: "load_data"
+format: html
+---
+
+```{r}
+# Set time zone
+Sys.setenv(TZ='Europe/London')
+
+# Download and attach standard packages
+if (!require(pacman)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(tidyverse, here, janitor, RMariaDB, DBI, glue, renv, dbplyr)
+
+i_am("R/load_data.qmd")
+```
+
+```{r}
+# Connect to CPRD database -------------------
+
+# Connect to the MySQL database: con
+con <- dbConnect(RMariaDB::MariaDB(), 
+                 dbname = "cprd2023", 
+                 host = "cprd-sea-2023.cisllnygqz7r.eu-west-2.rds.amazonaws.com", 
+                 port = 3306,
+                 user = "test",
+                 password = "password")
+```
+
+
+```{r}
+# Function to create tables for condition
+
+create_table <- function(cohort_def_var, con) {
+    query <- glue("
+        CREATE TABLE p068_{cohort_def_var}_define (
+        	patid VARCHAR(19),
+            pracid INT,
+            obsid VARCHAR(19) PRIMARY KEY,
+            obsdate DATE,
+            medcodeid VARCHAR(18),
+            value FLOAT,
+            numunitid INT,
+            obstypeid INT
+        );")
+    
+    dbExecute(con, query)
+}
+```
+
+```{r}
+# Write function to read data into temporary file, filter and only permanently load for records from patid of interest
+load_data <- function(n, filename, cohort_def_var, con) {
+    
+    # Drop temporary table if exists
+    dbExecute(con, "DROP TEMPORARY TABLE IF EXISTS temp;")
+    
+    # Create temp table
+    dbExecute(con, glue("CREATE TEMPORARY TABLE temp LIKE p068_{cohort_def_var}_define;"))
+    
+    # Load data into temporary table
+    load_query <- glue("LOAD DATA LOCAL INFILE '{here()}/data/{filename}_{sprintf('%03d', n)}.txt'
+            INTO TABLE temp
+            FIELDS TERMINATED BY '\\t'
+            LINES TERMINATED BY '\\r\\n'
+            IGNORE 1 ROWS 
+            (@patid, @dummy, @pracid, @obsid, @obsdate, @dummy, @dummy, @dummy, @medcodeid, @value, @numunitid, @obstypeid, @dummy, @dummy, @dummy) 
+            SET
+            	patid = NULLIF(@patid,''), 
+                pracid = NULLIF(@pracid,''), 
+                obsid = NULLIF(@obsid,''), 
+            	obsdate = NULLIF(STR_TO_DATE(@obsdate, '%d/%m/%Y'), '0000-00-00'), 
+                medcodeid = NULLIF(@medcodeid,''), 
+                value = NULLIF(@value,''),  
+                numunitid = NULLIF(@numunitid,''),  
+                obstypeid = NULLIF(@obstypeid,'');")
+    
+    dbExecute(con, load_query)
+    
+    # Keep only rows from cohort into permanent table
+    insert_query <- glue("INSERT INTO p068_{cohort_def_var}_define (patid, pracid, obsid, obsdate, medcodeid, value, numunitid, obstypeid)
+        SELECT patid, pracid, obsid, obsdate, medcodeid, value, numunitid, obstypeid FROM temp
+        WHERE patid IN (
+            SELECT patid
+            FROM p068_cohort_43_84
+        );")
+    
+    dbExecute(con, insert_query)
+    
+    # Drop temporary table
+    dbExecute(con, "DROP TABLE temp;")
+    
+    # Print number of rows in table
+    df_rows <- dbGetQuery(con, glue("SELECT COUNT(*) FROM p068_{cohort_def_var}_define;")) %>% slice(1) %>% pluck(1)
+    
+    print(glue("After file {n}: {df_rows} rows"))
+}
+```
+
+```{r}
+# Run queries
+
+# Set parameters
+cohort_def_var <- "smoking"
+filename <- "smoking_Define_Inc1_Observation"
+file_seq <- 26:67
+
+# Create table
+create_table(cohort_def_var, con)
+
+# Check table created
+dbGetQuery(con, glue("DESCRIBE p068_{cohort_def_var}_define;"))
+
+# Run function to read all data
+walk(file_seq, \(x) load_data(n = x, filename, cohort_def_var, con))
+```
+
+```{r}
+# Keep one record per person for each grouping of smoking codes
+codelist_file <- "smoking_cprd_plus.txt"
+
+codelist <- read_delim(here("codes", codelist_file), col_types = "cc____c___c___c_c") %>% 
+    mutate(cluster_id = if_else(is.na(cluster_id), "additional", cluster_id))
+```
+
+
+```{r}
+# Write cohort IDs to text file
+
+# cohort_lsoa <- dbGetQuery(con, "SELECT * FROM p068_cohort_43_84_lsoa;")
+
+## Split into list of 8 tables due to file size
+# cohort_lsoa_split <- split(cohort_lsoa, cut_width(1:nrow(cohort_lsoa),656000,boundary=0))
+
+## Loop through list and write each text file
+# walk(1:length(cohort_lsoa_split), \(x) cohort_lsoa_split[[x]] %>% write_delim(here("data", glue("24_003834_NICE_patientlist_{x}.txt")), delim = "\t"))
+
+```
+
+```{r}
+# # Filter previously loaded define tables so only the records for patients of interest remain
+# # Keep only columns of interest
+# # Previous define table has ALL the records in CPRD Aurum for the codelist
+# 
+# df_name <- list("p068_ckd_define", 
+#                 "p068_cvd_define",
+#                 "p068_cvdriskass_define",
+#                 "p068_fhyp_define",
+#                 "p068_slupus_define", 
+#                 "p068_t1dm_define")
+# 
+# for (i in df_name) {
+#     
+#     # Number of rows before
+#     before <- dbGetQuery(con, glue("SELECT COUNT(*) FROM {i};")) %>% slice(1) %>% pluck(1)
+#     
+#     # Keep only records for cohort and columns of interest
+#     dbExecute(con, glue("CREATE TABLE temp_def (
+#         SELECT
+#             patid,
+#             pracid,
+#             obsid, 
+#             obsdate,
+#             medcodeid,
+#             value,
+#             numunitid,
+#             obstypeid
+#         FROM {i}
+#         WHERE patid IN (
+#             SELECT patid FROM p068_cohort_43_84
+#         )
+#     );"))
+#     
+#     # Drop original define table
+#     dbExecute(con, glue("DROP TABLE {i};"))
+#     
+#     # Rename table
+#     dbExecute(con, glue("ALTER TABLE temp_def RENAME {i};"))
+#     
+#     # Number of rows after
+#     after <- dbGetQuery(con, glue("SELECT COUNT(*) FROM {i};")) %>% slice(1) %>% pluck(1)
+# 
+#     # Print
+#     print(glue("nrows before: {before}, nrows after: {after}"))
+# }
+
+
+```
+
+
+```{r}
+# Disconnect database
+dbDisconnect(con)
+```
+
