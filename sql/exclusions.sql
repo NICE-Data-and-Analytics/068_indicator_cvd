@@ -31,11 +31,14 @@ SELECT
     description AS numunitid, 
     obstypeid_desc AS obstypeid
 FROM p068_cvdriskass_define AS p
+-- Get units
 LEFT JOIN lookup_numunitid AS n ON p.numunitid = n.code
+-- Label obstype
 LEFT JOIN (
 	SELECT code, description AS obstypeid_desc
 	FROM lookup_obstypeid
     ) AS o ON p.obstypeid = o.code
+-- Label medcodes
 LEFT JOIN (
 	SELECT medcodeid AS medcode, term
     FROM medcodeid_aurum_202312
@@ -71,82 +74,77 @@ SELECT *
 FROM p068_cvdriskass_define
 WHERE numunitid IN ("Unk UoM");
 
-SELECT MIN(value), AVG(value), MAX(value)
+-- Some negative values and some very large values
+SELECT COUNT(*), MIN(value), AVG(value), MAX(value)
 FROM p068_cvdriskass_define;
+-- 31515157	-2147480000	-911.8656535008084	231113
 
--- 1st April 2020 for IND2023-164
-DROP TABLE IF EXISTS p068_cvdriskass_202004_exclusion;
+SELECT COUNT(*), MIN(value), AVG(value), MAX(value)
+FROM p068_cvdriskass_define
+WHERE value BETWEEN 0 AND 100;
+-- 27871191	0	12.319821410646313	100
 
-CREATE TABLE p068_cvdriskass_202004_exclusion AS
-WITH temp AS (
-	SELECT c.*,
-		ROW_NUMBER() OVER (PARTITION BY patid ORDER BY obsdate DESC) AS rn
-	FROM p068_cvdriskass_define AS c
-	WHERE numunitid NOT IN ("year", "years")
-	AND medcodeid NOT IN ("2115691000000116", -- QRISK2 calculated heart age
-		"2115711000000119", -- Difference between actual and QRISK2 calculated heart age
-		"434881000006116", -- 5 yr CHD risk (Framingham)
-		"459503011", -- Framingham Coronary Heart Disease 5 year risk score
-		"987511000006110" -- Joint British Societies cardiovascular disease 5 yr risk score
-		)
-	AND obsdate < "2020-04-01"
-	AND (value BETWEEN 20 AND 100
-		OR medcodeid IN (
-			"977791000006118", -- JBS score 20-30%
-			"977801000006117" -- JBS score >30%
-			)
-		)
-	AND patid IN (SELECT patid FROM p068_cohort_45_84)
-)
-SELECT * FROM temp WHERE rn = 1;
-    
+-- Potential for values to be recorded as decimals rather than percentages
+-- Would need to adjust threshold to 
+SELECT *
+FROM p068_cvdriskass_define
+WHERE value > 0 and value <= 1
+LIMIT 100;
+
+SELECT COUNT(*), MIN(value), AVG(value), MAX(value)
+FROM p068_cvdriskass_define
+WHERE value > 0 AND value <= 1;
+
+-- See units for records with value between 0 and 1
 SELECT numunitid, COUNT(*)
-FROM p068_cvdriskass_202004_exclusion
+FROM p068_cvdriskass_define
+WHERE value > 0 AND value <= 1
 GROUP BY numunitid
 ORDER BY COUNT(*) DESC;
 
-SELECT COUNT(DISTINCT patid)
-FROM p068_cvdriskass_202004_exclusion; -- 777001
+DROP TABLE IF EXISTS p068_cvdriskass_exclusion;
 
-SELECT medcodeid_desc, medcodeid, COUNT(*)
-FROM p068_cvdriskass_202004_exclusion
-GROUP BY medcodeid_desc, medcodeid
-ORDER BY COUNT(*) DESC;
-
-SELECT MIN(value), AVG(value), MAX(value) -- Min value is 0 as used some JBS medcodes that specify result
-FROM p068_cvdriskass_202004_exclusion;
-
--- 1st April 2018 for IND2023-165 and IND2023-166
-DROP TABLE IF EXISTS p068_cvdriskass_201804_exclusion;
-
-CREATE TABLE p068_cvdriskass_201804_exclusion AS
+-- All records of 10-year risk score 20% or more prior to 2020-04
+	-- Will need to filter on obsdate for 2018-04 for IND2023-165 and IND2023-166
+    -- Using one table only as don't want to hog space
+-- Exclude risk assessments that have units in years
+	-- May want to drop more units - some are unintelligable
+-- Exclude records specifically recording heart age or 5 year risk
+	-- Only want 10-year risk
+	-- Assumes medcodes that don't specify 5/10-year risk are recording 10 year risk
+-- 
+CREATE TABLE p068_cvdriskass_exclusion_202004 AS
 WITH temp AS (
 	SELECT c.*,
 		ROW_NUMBER() OVER (PARTITION BY patid ORDER BY obsdate DESC) AS rn
 	FROM p068_cvdriskass_define AS c
+    -- Drop records with units in years
 	WHERE numunitid NOT IN ("year", "years")
+    -- Drop records recording heart age or 5 year risk
 	AND medcodeid NOT IN ("2115691000000116", -- QRISK2 calculated heart age
 		"2115711000000119", -- Difference between actual and QRISK2 calculated heart age
 		"434881000006116", -- 5 yr CHD risk (Framingham)
 		"459503011", -- Framingham Coronary Heart Disease 5 year risk score
 		"987511000006110" -- Joint British Societies cardiovascular disease 5 yr risk score
 		)
-	AND obsdate < "2018-04-01"
+	-- Only the records before the time period the indicators are interested in
+	AND obsdate < "2020-04-01"
+    -- Score thresholds
 	AND (value BETWEEN 20 AND 100
 		OR medcodeid IN (
 			"977791000006118", -- JBS score 20-30%
 			"977801000006117" -- JBS score >30%
 			)
 		)
-	AND patid IN (SELECT patid FROM p068_cohort_43_84)
+	AND patid IN (SELECT patid FROM p068_cohort_43_84) -- Rmb all members of 45-84 cohort are in 43-84
 )
 SELECT * FROM temp WHERE rn = 1;
 
 SELECT COUNT(DISTINCT patid)
-FROM p068_cvdriskass_201804_exclusion; -- 619590
+FROM p068_cvdriskass_exclusion; -- 619590
 
 SELECT MIN(value), AVG(value), MAX(value) -- Min value is 0 as used some JBS medcodes that specify result
-FROM p068_cvdriskass_201804_exclusion;
+FROM p068_cvdriskass_exclusion;
 
 /* 
 CVD – any record of coronary heart disease, stroke (excluding haemorrhagic stroke), 
@@ -184,8 +182,7 @@ WITH temp AS (
 		SELECT code, description AS obstypeid_desc
 		FROM lookup_obstypeid
     ) AS o ON c.obstypeid = o.code
-	WHERE (c.patid IN (SELECT patid FROM p068_cohort_45_84)
-		OR c.patid IN (SELECT patid FROM p068_cohort_43_84))
+	WHERE c.patid IN (SELECT patid FROM p068_cohort_43_84)
     AND c.obstypeid NOT IN (1, 4)
 )
 SELECT * FROM temp WHERE rn = 1;
@@ -204,6 +201,10 @@ FROM p068_cvd_exclusion
 WHERE patid IN (SELECT patid FROM p068_cohort_43_84);
 -- 1844887	979829
 -- Same as all, as expected
+
+SELECT *
+FROM p068_cvd_exclusion
+LIMIT 10;
 
 /* 
 Familial hypercholesterolaemia
@@ -241,9 +242,8 @@ WITH temp AS (
 		SELECT code, description AS obstypeid_desc
 		FROM lookup_obstypeid
     ) AS o ON c.obstypeid = o.code
-	WHERE (c.patid IN (SELECT patid FROM p068_cohort_45_84)
-		OR c.patid IN (SELECT patid FROM p068_cohort_43_84))
-    AND c.obstypeid NOT IN (4)
+	WHERE c.patid IN (SELECT patid FROM p068_cohort_43_84)
+    AND c.obstypeid NOT IN (1, 4)
 )
 SELECT * FROM temp WHERE rn = 1;
 
@@ -261,3 +261,123 @@ FROM p068_fhyp_exclusion
 WHERE patid IN (SELECT patid FROM p068_cohort_43_84);
 -- 45414
 
+SELECT *
+FROM p068_fhyp_exclusion
+LIMIT 10;
+
+/* 
+Type 1 diabetes – any record of type 1 diabetes on or before the end date
+*/
+
+SELECT obstypeid, COUNT(*)
+FROM p068_t1dm_define
+GROUP BY obstypeid
+ORDER BY COUNT(*) DESC;
+
+DROP TABLE IF EXISTS p068_t1dm_exclusion;
+
+CREATE TABLE p068_t1dm_exclusion AS
+WITH temp AS (
+	SELECT 
+		c.patid, 
+		c.pracid, 
+		c.obsid, 
+		c.obsdate, 
+		c.medcodeid, 
+		d.term AS medcodeid_desc,
+        d.include, 
+        d.category, 
+        d.cluster_id,
+		o.obstypeid_desc AS obstypeid,
+		ROW_NUMBER() OVER (PARTITION BY patid ORDER BY obsdate DESC) AS rn
+	FROM p068_t1dm_define AS c
+    LEFT JOIN (
+		SELECT medcodeid AS medcode, term, include, category, cluster_id
+		FROM p068_codes
+        WHERE category IN ("Type 1 diabetes")
+	) AS d ON c.medcodeid = d.medcode
+    LEFT JOIN (
+		SELECT code, description AS obstypeid_desc
+		FROM lookup_obstypeid
+    ) AS o ON c.obstypeid = o.code
+	WHERE (c.patid IN (SELECT patid FROM p068_cohort_45_84)
+		OR c.patid IN (SELECT patid FROM p068_cohort_43_84))
+    AND c.obstypeid NOT IN (1, 4)
+)
+SELECT * FROM temp WHERE rn = 1;
+
+SELECT COUNT(*)
+FROM p068_t1dm_exclusion;
+-- 48401
+
+SELECT COUNT(*)
+FROM p068_t1dm_exclusion
+WHERE patid IN (SELECT patid FROM p068_cohort_45_84);
+-- 45920
+
+SELECT COUNT(*)
+FROM p068_t1dm_exclusion
+WHERE patid IN (SELECT patid FROM p068_cohort_43_84);
+-- 48401
+
+SELECT *
+FROM p068_t1dm_exclusion
+LIMIT 10;
+
+/* 
+CKD stage 3a to 5 – any record of CKD stage 3 to 5, 
+with no subsequent code for CKD resolved or CKD stage 1 to 2, 
+on or before the end date
+*/
+
+SELECT obstypeid, COUNT(*)
+FROM p068_ckd_define
+GROUP BY obstypeid
+ORDER BY COUNT(*) DESC;
+
+DROP TABLE IF EXISTS p068_ckd_exclusion;
+
+-- Keep latest record per patient
+-- If latest record is not stage 3 to 5, drop
+CREATE TABLE p068_ckd_exclusion AS
+WITH temp AS (
+	SELECT 
+		c.patid, 
+		c.pracid, 
+		c.obsid, 
+		c.obsdate, 
+		c.medcodeid, 
+		d.term AS medcodeid_desc,
+        d.include, 
+        d.category, 
+        d.cluster_id,
+		o.obstypeid_desc AS obstypeid,
+		ROW_NUMBER() OVER (PARTITION BY patid ORDER BY obsdate DESC) AS rn
+	FROM p068_ckd_define AS c
+    LEFT JOIN (
+		SELECT medcodeid AS medcode, term, include, category, cluster_id
+		FROM p068_codes
+        WHERE category IN ("CKD stage 3 to 5", "CKD stage 1 and 2", "CKD resolved")
+	) AS d ON c.medcodeid = d.medcode
+    LEFT JOIN (
+		SELECT code, description AS obstypeid_desc
+		FROM lookup_obstypeid
+    ) AS o ON c.obstypeid = o.code
+	WHERE (c.patid IN (SELECT patid FROM p068_cohort_45_84)
+		OR c.patid IN (SELECT patid FROM p068_cohort_43_84))
+    AND c.obstypeid NOT IN (1, 4)
+),
+latest AS (
+	SELECT * FROM temp WHERE rn = 1
+)
+SELECT *
+FROM latest
+WHERE category = "CKD stage 3 to 5";
+
+SELECT COUNT(*), COUNT(DISTINCT patid)
+FROM p068_ckd_exclusion;
+-- 441291	441291
+
+SELECT *
+FROM p068_ckd_exclusion
+LIMIT 20;

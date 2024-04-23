@@ -62,7 +62,7 @@ DESCRIBE p068_codes;
 
 	-- 1 file
     -- NULLIF to help read null values
-LOAD DATA LOCAL INFILE 'C:/Users/Public/Documents/068_indicator_cvd/codes/tia_cprd_plus.txt'
+LOAD DATA LOCAL INFILE 'C:/Users/Public/Documents/068_indicator_cvd/codes/ckd_cprd_plus.txt'
 INTO TABLE p068_codes 
 FIELDS TERMINATED BY ' '
 ENCLOSED BY '"'
@@ -80,3 +80,6 @@ SET
 SELECT * FROM p068_codes LIMIT 10;
 
 SELECT COUNT(*) FROM p068_codes;
+
+SELECT DISTINCT category
+FROM p068_codes;
