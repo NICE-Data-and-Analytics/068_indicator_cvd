@@ -1,110 +1,110 @@
 cluster_id cluster_description snomed_code snomed_code_description pcd_refset_id service_and_ruleset med_code_id observations original_read_code cleansed_read_code term snomed_ct_description_id release emis_code_category_id include comments category
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 162864005 "Body mass index 30+ - obesity (finding)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 253848011 2000000 22K5 22K5.00 "Body mass index 30+ - obesity" 253848011 NA 2 NA NA Obese
 BMIHEALTHY_COD "Body mass index (BMI) healthy codes" 35425004 "Normal body mass index (finding)" 999016011000230101 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 253844013 2000000 22K1 22K1.00 "Normal body mass index" 59104012 NA 2 NA NA "Not obese"
-NA NA 414916001 NA NA NA 2535065012 2000000 C380 C380.00 Obesity 2535065012 NA 32 obese NA Obese
+additional NA 414916001 NA NA NA 2535065012 2000000 C380 C380.00 Obesity 2535065012 NA 32 obese NA Obese
 BMIOVER_COD "Body mass index (BMI) overweight codes" 162863004 "Body mass index 25-29 - overweight (finding)" 999016091000230107 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 253847018 1000000 22K4 22K4.00 "Body mass index index 25-29 - overweight" 253847018 NA 2 NA NA "Not obese"
-NA NA 268522006 NA NA NA 401534016 600000 66C 66C..00 "Obesity monitoring" 401534016 NA 1 obese NA Obese
+additional NA 268522006 NA NA NA 401534016 600000 66C 66C..00 "Obesity monitoring" 401534016 NA 1 obese NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 408512008 "Body mass index 40+ - severely obese (finding)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 2160062010 300000 22K7 22K7.00 "Body mass index 40+ - severely obese" 2160062010 NA 2 NA NA Obese
 BMIHEALTHY_COD "Body mass index (BMI) healthy codes" 412768003 "Body mass index 20-24 - normal (finding)" 999016011000230101 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2474325012 300000 22K8 22K8.00 "Body mass index 20-24 - normal" 2474325012 NA 2 NA NA "Not obese"
 BMIUNDER_COD "Body mass index (BMI) underweight codes" 310252000 "Body mass index less than 20 (finding)" 999016131000230105 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 453856012 300000 22K6 22K6.00 "Body mass index less than 20" 453856012 NA 2 NA NA "Not obese"
-NA NA 185741002 NA NA NA 285741017 200000 9OK1 9OK1.00 "Attends obesity monitoring" 285741017 NA 37 obese NA Obese
-NA NA 238136002 NA NA NA 356968010 200000 C3803 C380300 "Morbid obesity" 356968010 NA 32 obese NA Obese
+additional NA 185741002 NA NA NA 285741017 200000 9OK1 9OK1.00 "Attends obesity monitoring" 285741017 NA 37 obese NA Obese
+additional NA 238136002 NA NA NA 356968010 200000 C3803 C380300 "Morbid obesity" 356968010 NA 32 obese NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 162690006 "On examination - obese (finding)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 280881000006115 100000 222A 222A.00 "O/E - obese" 253576010 NA 27 NA NA Obese
 BMIOVER_COD "Body mass index (BMI) overweight codes" 162863004 "Body mass index 25-29 - overweight (finding)" 999016091000230107 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 4553701000006115 50000 ^ESCTBO455370 NA "Body mass index 25-29 - overweight" 2773979010 NA 2 NA NA "Not obese"
-NA NA 248311001 NA NA NA 370698013 40000 C3804 C380400 "Central obesity" 370698013 NA 32 obese NA Obese
-NA NA 713971000000102 NA NA NA 26111000000114 40000 9OK-1 9OK..11 "Obesity clinic administration" 1565211000000116 NA 37 obese NA Obese
+additional NA 248311001 NA NA NA 370698013 40000 C3804 C380400 "Central obesity" 370698013 NA 32 obese NA Obese
+additional NA 713971000000102 NA NA NA 26111000000114 40000 9OK-1 9OK..11 "Obesity clinic administration" 1565211000000116 NA 37 obese NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 162690006 "On examination - obese (finding)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 253576010 30000 22A5-1 22A5.11 "O/E - obese" 253576010 NA 27 NA NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 914721000000105 "Obese class I (body mass index 30.0 - 34.9) (finding)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 2350241000000116 30000 22KC 22KC.00 "Obese class I (body mass index 30.0 - 34.9)" 2350241000000116 NA 2 NA NA Obese
-NA NA 185750000 NA NA NA 285750015 30000 9OKA 9OKA.00 "Obesity monitoring check done" 285750015 NA 37 obese NA Obese
-NA NA 185744005 NA NA NA 270301000006112 30000 9OK4 9OK4.00 "Obesity monitoring first letter" 285744013 NA 37 obese NA Obese
+additional NA 185750000 NA NA NA 285750015 30000 9OKA 9OKA.00 "Obesity monitoring check done" 285750015 NA 37 obese NA Obese
+additional NA 185744005 NA NA NA 270301000006112 30000 9OK4 9OK4.00 "Obesity monitoring first letter" 285744013 NA 37 obese NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 914731000000107 "Obese class II (body mass index 35.0 - 39.9) (finding)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 2350261000000115 20000 22KD 22KD.00 "Obese class II (body mass index 35.0 - 39.9)" 2350261000000115 NA 2 NA NA Obese
-NA NA 161453001 NA NA NA 251604013 20000 1444 1444 "H/O: obesity" 251604013 NA 32 obese NA Obese
-NA NA 268522006 NA NA NA 264769013 20000 66CZ 66CZ.00 "Obesity monitoring NOS" 401534016 NA 1 obese NA Obese
-NA NA 857321000006109 NA NA NA 857321000006113 20000 EGTONMO1 NA "Moderately obese" 857321000006113 NA 2 obese NA Obese
-NA NA 857911000006102 NA NA NA 857911000006118 20000 EGTONVE2 NA "Very obese" 857911000006118 NA 2 obese NA Obese
+additional NA 161453001 NA NA NA 251604013 20000 1444 1444 "H/O: obesity" 251604013 NA 32 obese NA Obese
+additional NA 268522006 NA NA NA 264769013 20000 66CZ 66CZ.00 "Obesity monitoring NOS" 401534016 NA 1 obese NA Obese
+additional NA 857321000006109 NA NA NA 857321000006113 20000 EGTONMO1 NA "Moderately obese" 857321000006113 NA 2 obese NA Obese
+additional NA 857911000006102 NA NA NA 857911000006118 20000 EGTONVE2 NA "Very obese" 857911000006118 NA 2 obese NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 914741000000103 "Obese class III (body mass index equal to or greater than 40.0) (finding)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 1900331000006113 10000 22KE 22KE.00 "Obese class III (body mass index equal to or greater than 40.0)" 2350281000000112 NA 2 NA NA Obese
-NA NA 170797005 NA NA NA 264756014 10000 66C4 66C4.00 "Has seen dietician - obesity" 264756014 NA 1 obese NA Obese
-NA NA 170799008 NA NA NA 264758010 10000 66C6 66C6.00 "Treatment of obesity started" 264758010 NA 1 obese NA Obese
-NA NA 415530009 NA NA NA 451432013 10000 C38z0 C38z000 "Simple obesity" 2535221011 NA 32 obese NA Obese
-NA NA 713951000000106 NA NA NA 21621000000119 10000 9OK 9OK..00 "Obesity monitoring administration" 1565191000000115 NA 37 obese NA Obese
-NA NA 415530009 NA NA NA 2537960015 7000 C3800 C380000 "Obesity due to excess calories" 2537960015 NA 32 obese NA Obese
-NA NA 310428009 NA NA NA 5999801000006118 7000 ^ESCTOB599980 NA "Obesity monitoring invitation" 454001017 NA 31 obese NA Obese
-NA NA 44772007 NA NA NA 220811000000110 6000 L161 L161.00 "Maternal obesity syndrome" 74689019 NA 32 obese NA Obese
+additional NA 170797005 NA NA NA 264756014 10000 66C4 66C4.00 "Has seen dietician - obesity" 264756014 NA 1 obese NA Obese
+additional NA 170799008 NA NA NA 264758010 10000 66C6 66C6.00 "Treatment of obesity started" 264758010 NA 1 obese NA Obese
+additional NA 415530009 NA NA NA 451432013 10000 C38z0 C38z000 "Simple obesity" 2535221011 NA 32 obese NA Obese
+additional NA 713951000000106 NA NA NA 21621000000119 10000 9OK 9OK..00 "Obesity monitoring administration" 1565191000000115 NA 37 obese NA Obese
+additional NA 415530009 NA NA NA 2537960015 7000 C3800 C380000 "Obesity due to excess calories" 2537960015 NA 32 obese NA Obese
+additional NA 310428009 NA NA NA 5999801000006118 7000 ^ESCTOB599980 NA "Obesity monitoring invitation" 454001017 NA 31 obese NA Obese
+additional NA 44772007 NA NA NA 220811000000110 6000 L161 L161.00 "Maternal obesity syndrome" 74689019 NA 32 obese NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 414915002 "Obese (finding)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 6866991000006116 5000 ^ESCTOB686699 NA Obese 2535064011 NA 2 NA NA Obese
-NA NA 763085007 NA NA NA 285742012 5000 9OK2 9OK2.00 "Obesity monitoring refused" 3637819012 NA 37 obese NA Obese
-NA NA 238134004 NA NA NA 356966014 5000 C3805 C380500 "Generalised obesity" 356966014 NA 32 obese NA Obese
-NA NA 185745006 NA NA NA 270311000006110 5000 9OK5 9OK5.00 "Obesity monitoring second letter" 285745014 NA 37 obese NA Obese
+additional NA 763085007 NA NA NA 285742012 5000 9OK2 9OK2.00 "Obesity monitoring refused" 3637819012 NA 37 obese NA Obese
+additional NA 238134004 NA NA NA 356966014 5000 C3805 C380500 "Generalised obesity" 356966014 NA 32 obese NA Obese
+additional NA 185745006 NA NA NA 270311000006110 5000 9OK5 9OK5.00 "Obesity monitoring second letter" 285745014 NA 37 obese NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 190966007 "Extreme obesity with alveolar hypoventilation (disorder)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 293635019 4000 C3802 C380200 "Extreme obesity with alveolar hypoventilation" 293635019 NA 32 NA NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 190966007 "Extreme obesity with alveolar hypoventilation (disorder)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 1803041000000114 4000 C38y0-1 C38y011 "Obesity hypoventilation syndrome" 1803041000000114 NA 32 NA NA Obese
-NA NA 444862003 NA NA NA 2871984013 4000 C3808 C380800 "Childhood obesity" 2871984013 NA 32 obese NA Obese
-NA NA 185747003 NA NA NA 270381000006115 4000 9OK7 9OK7.00 "Obesity monitoring verbal invite" 285747018 NA 37 obese NA Obese
-NA NA 198181000000102 NA NA NA 298511000000116 4000 212Q 212Q.00 "Obesity resolved" 298511000000116 NA 27 "not obese" NA "Not obese"
-NA NA 923861000006108 NA NA NA 923861000006112 4000 PCNQBO1 NA "Body mass index" 923861000006112 NA 42 obese NA Obese
-NA NA 424753004 NA NA NA 1227771010 3000 ZV653-9 ZV65319 "[V]Dietary counselling in obesity" 2645393015 NA 32 obese NA Obese
-NA NA 185748008 NA NA NA 270281000006113 3000 9OK8 9OK8.00 "Obesity monitoring telephone invite" 285748011 NA 37 obese NA Obese
-NA NA 894961000000105 NA NA NA 2303211000000117 3000 8T11 8T11.00 "Referral to multidisciplinary obesity clinic" 2303211000000117 NA 32 obese NA Obese
+additional NA 444862003 NA NA NA 2871984013 4000 C3808 C380800 "Childhood obesity" 2871984013 NA 32 obese NA Obese
+additional NA 185747003 NA NA NA 270381000006115 4000 9OK7 9OK7.00 "Obesity monitoring verbal invite" 285747018 NA 37 obese NA Obese
+additional NA 198181000000102 NA NA NA 298511000000116 4000 212Q 212Q.00 "Obesity resolved" 298511000000116 NA 27 "not obese" NA "Not obese"
+additional NA 923861000006108 NA NA NA 923861000006112 4000 PCNQBO1 NA "Body mass index" 923861000006112 NA 42 obese NA Obese
+additional NA 424753004 NA NA NA 1227771010 3000 ZV653-9 ZV65319 "[V]Dietary counselling in obesity" 2645393015 NA 32 obese NA Obese
+additional NA 185748008 NA NA NA 270281000006113 3000 9OK8 9OK8.00 "Obesity monitoring telephone invite" 285748011 NA 37 obese NA Obese
+additional NA 894961000000105 NA NA NA 2303211000000117 3000 8T11 8T11.00 "Referral to multidisciplinary obesity clinic" 2303211000000117 NA 32 obese NA Obese
 BMIHEALTHY_COD "Body mass index (BMI) healthy codes" 920291000000102 "Child body mass index 26th-49th centile (finding)" 999016011000230101 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2362381000000111 2000 22K99 22K9900 "Child body mass index 26th-49th centile" 2362381000000111 NA 2 NA NA "Not obese"
 BMIHEALTHY_COD "Body mass index (BMI) healthy codes" 920841000000108 "Child body mass index 51st-74th centile (finding)" 999016011000230101 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2363511000000115 2000 22K9B 22K9B00 "Child body mass index 51st-74th centile" 2363511000000115 NA 2 NA NA "Not obese"
 BMIHEALTHY_COD "Body mass index (BMI) healthy codes" 920951000000101 "Child body mass index 76th-90th centile (finding)" 999016011000230101 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2363771000000117 2000 22K9D 22K9D00 "Child body mass index 76th-90th centile" 2363771000000117 NA 2 NA NA "Not obese"
-NA NA 170800007 NA NA NA 264759019 2000 66C7 66C7.00 "Treatment of obesity stopped" 264759019 NA 1 obese NA Obese
-NA NA 302872003 NA NA NA 293631011 2000 C38 C38..00 "Obesity and other hyperalimentation" 444857015 NA 32 obese NA Obese
-NA NA 296526005 NA NA NA 436946011 2000 C3806 C380600 "Adult-onset obesity" 436946011 NA 32 obese NA Obese
-NA NA 713951000000106 NA NA NA 16131000000113 2000 9OKZ 9OKZ.00 "Obesity monitoring admin.NOS" 1565191000000115 NA 37 obese NA Obese
-NA NA 270486005 NA NA NA 737721000006113 2000 C381 C381.00 "Localised obesity" 405105012 NA 32 obese NA Obese
-NA NA 1991711000006108 NA NA NA 1991711000006112 2000 EMISNQRE596 NA "Reason for influenza vaccine - BMI 40+" 1991711000006112 NA 9 obese NA Obese
+additional NA 170800007 NA NA NA 264759019 2000 66C7 66C7.00 "Treatment of obesity stopped" 264759019 NA 1 obese NA Obese
+additional NA 302872003 NA NA NA 293631011 2000 C38 C38..00 "Obesity and other hyperalimentation" 444857015 NA 32 obese NA Obese
+additional NA 296526005 NA NA NA 436946011 2000 C3806 C380600 "Adult-onset obesity" 436946011 NA 32 obese NA Obese
+additional NA 713951000000106 NA NA NA 16131000000113 2000 9OKZ 9OKZ.00 "Obesity monitoring admin.NOS" 1565191000000115 NA 37 obese NA Obese
+additional NA 270486005 NA NA NA 737721000006113 2000 C381 C381.00 "Localised obesity" 405105012 NA 32 obese NA Obese
+additional NA 1991711000006108 NA NA NA 1991711000006112 2000 EMISNQRE596 NA "Reason for influenza vaccine - BMI 40+" 1991711000006112 NA 9 obese NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 443371000124107 "Obese class I (finding)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 12113161000006113 1000 ^ESCT1211316 NA "Obese class I" 660381000124114 NA 2 NA NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 819948005 "Obese class III (finding)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 13926671000006119 1000 ^ESCT1392667 NA "Obese class III" 3858271015 NA 2 NA NA Obese
 BMIHEALTHY_COD "Body mass index (BMI) healthy codes" 920251000000105 "Child body mass index 10th-24th centile (finding)" 999016011000230101 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2362261000000111 1000 22K97 22K9700 "Child body mass index 10th-24th centile" 2362261000000111 NA 2 NA NA "Not obese"
-NA NA 185743004 NA NA NA 285743019 1000 9OK3 9OK3.00 "Obesity monitoring default" 285743019 NA 37 obese NA Obese
-NA NA 981741000006106 NA NA NA 981741000006110 1000 EMISCUN18 NA "Underweight: adult BMI 18.5; child BMI 5th percentile; or less" 981741000006110 NA 27 "not obese" NA "Not obese"
-NA NA 185746007 NA NA NA 270321000006119 800 9OK6 9OK6.00 "Obesity monitoring third letter" 285746010 NA 37 obese NA Obese
+additional NA 185743004 NA NA NA 285743019 1000 9OK3 9OK3.00 "Obesity monitoring default" 285743019 NA 37 obese NA Obese
+additional NA 981741000006106 NA NA NA 981741000006110 1000 EMISCUN18 NA "Underweight: adult BMI 18.5; child BMI 5th percentile; or less" 981741000006110 NA 27 "not obese" NA "Not obese"
+additional NA 185746007 NA NA NA 270321000006119 800 9OK6 9OK6.00 "Obesity monitoring third letter" 285746010 NA 37 obese NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 162864005 "Body mass index 30+ - obesity (finding)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 4553741000006118 700 ^ESCTBM455374 NA "BMI 30+ - obesity" 2164216018 NA 2 NA NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 190966007 "Extreme obesity with alveolar hypoventilation (disorder)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 2535848016 700 C38y0 C38y000 "Pickwickian syndrome" 2535848016 NA 32 NA NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 443381000124105 "Obese class II (finding)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 12113181000006115 700 ^ESCT1211318 NA "Obese class II" 660421000124116 NA 2 NA NA Obese
 BMIOVER_COD "Body mass index (BMI) overweight codes" 920991000000109 "Child body mass index 92nd-97th centile (finding)" 999016091000230107 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2363891000000114 700 22K9F 22K9F00 "Child body mass index 92nd-97th centile" 2363891000000114 NA 2 NA NA "Not obese"
 BMIOBESE_COD "Body mass index (BMI) obese codes" 921031000000102 "Child body mass index 98.1st-99.6th centile (finding)" 999016051000230102 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2364011000000110 600 22K9H 22K9H00 "Child body mass index 98.1st-99.6th centile" 2364011000000110 NA 2 NA NA Obese
-NA NA 294493008 NA NA NA 434770018 600 C3807 C380700 "Lifelong obesity" 434770018 NA 32 obese NA Obese
-NA NA 284352003 NA NA NA 5686501000006114 600 ^ESCTOB568650 NA "Obesity diet education" 2575926017 NA 31 obese NA Obese
+additional NA 294493008 NA NA NA 434770018 600 C3807 C380700 "Lifelong obesity" 434770018 NA 32 obese NA Obese
+additional NA 284352003 NA NA NA 5686501000006114 600 ^ESCTOB568650 NA "Obesity diet education" 2575926017 NA 31 obese NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 190966007 "Extreme obesity with alveolar hypoventilation (disorder)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 232631000006113 500 C38y-1 C38y.11 "Pickwickian syndrome" 2535848016 NA 32 NA NA Obese
 BMIHEALTHY_COD "Body mass index (BMI) healthy codes" 920201000000109 "Child body mass index 3rd-8th centile (finding)" 999016011000230101 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2362121000000112 500 22K95 22K9500 "Child body mass index 3rd-8th centile" 2362121000000112 NA 2 NA NA "Not obese"
-NA NA 414916001 NA NA NA 293803016 500 Cyu70 Cyu7000 "[X]Other obesity" 2535065012 NA 32 obese NA Obese
+additional NA 414916001 NA NA NA 293803016 500 Cyu70 Cyu7000 "[X]Other obesity" 2535065012 NA 32 obese NA Obese
 BMIHEALTHY_COD "Body mass index (BMI) healthy codes" 920311000000101 "Child body mass index on 50th centile (finding)" 999016011000230101 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2362441000000114 400 22K9A 22K9A00 "Child body mass index on 50th centile" 2362441000000114 NA 2 NA NA "Not obese"
 BMIOVER_COD "Body mass index (BMI) overweight codes" 921011000000105 "Child body mass index on 98th centile (finding)" 999016091000230107 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2363951000000111 400 22K9G 22K9G00 "Child body mass index on 98th centile" 2363951000000111 NA 2 NA NA "Not obese"
 BMIOVER_COD "Body mass index (BMI) overweight codes" 162863004 "Body mass index 25-29 - overweight (finding)" 999016091000230107 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 4553721000006113 400 ^ESCTBM455372 NA "BMI 25-29 - overweight" 2164215019 NA 2 NA NA "Not obese"
-NA NA 271590003 NA NA NA 5526441000006112 400 ^ESCTOB552644 NA "Obese build" 406434015 NA 31 obese NA Obese
+additional NA 271590003 NA NA NA 5526441000006112 400 ^ESCTOB552644 NA "Obese build" 406434015 NA 31 obese NA Obese
 BMIOBESE_COD "Body mass index (BMI) obese codes" 921051000000109 "Child body mass index greater than 99.6th centile (finding)" 999016051000230102 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2364071000000117 300 22K9J 22K9J00 "Child body mass index greater than 99.6th centile" 2364071000000117 NA 2 NA NA Obese
 BMIHEALTHY_COD "Body mass index (BMI) healthy codes" 920271000000101 "Child body mass index on 25th centile (finding)" 999016011000230101 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2362321000000110 300 22K98 22K9800 "Child body mass index on 25th centile" 2362321000000110 NA 2 NA NA "Not obese"
 BMIHEALTHY_COD "Body mass index (BMI) healthy codes" 920931000000108 "Child body mass index on 75th centile (finding)" 999016011000230101 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2363711000000110 300 22K9C 22K9C00 "Child body mass index on 75th centile" 2363711000000110 NA 2 NA NA "Not obese"
 BMIHEALTHY_COD "Body mass index (BMI) healthy codes" 920971000000105 "Child body mass index on 91st centile (finding)" 999016011000230101 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2363831000000113 300 22K9E 22K9E00 "Child body mass index on 91st centile" 2363831000000113 NA 2 NA NA "Not obese"
 BMIUNDER_COD "Body mass index (BMI) underweight codes" 310252000 "Body mass index less than 20 (finding)" 999016131000230105 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 5998281000006119 300 ^ESCTBM599828 NA "BMI less than 20" 2164663010 NA 2 NA NA "Not obese"
 BMIUNDER_COD "Body mass index (BMI) underweight codes" 920161000000101 "Child body mass index 0.4th-1.9th centile (finding)" 999016131000230105 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2362001000000116 300 22K93 22K9300 "Child body mass index 0.4th-1.9th centile" 2362001000000116 NA 2 NA NA "Not obese"
-NA NA 170798000 NA NA NA 264757017 300 66C5 66C5.00 "Treatment of obesity changed" 264757017 NA 1 obese NA Obese
-NA NA 640791000000105 NA NA NA 881831000006116 300 C38-99 C38..99 "Hyperalimentation incl.obesity" 881831000006116 NA 32 obese NA Obese
+additional NA 170798000 NA NA NA 264757017 300 66C5 66C5.00 "Treatment of obesity changed" 264757017 NA 1 obese NA Obese
+additional NA 640791000000105 NA NA NA 881831000006116 300 C38-99 C38..99 "Hyperalimentation incl.obesity" 881831000006116 NA 32 obese NA Obese
 BMIHEALTHY_COD "Body mass index (BMI) healthy codes" 920231000000103 "Child body mass index on 9th centile (finding)" 999016011000230101 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2362201000000112 200 22K96 22K9600 "Child body mass index on 9th centile" 2362201000000112 NA 2 NA NA "Not obese"
-NA NA 170807005 NA NA NA 264768017 200 66CE 66CE.00 "Reason for obesity therapy - occupational" 264768017 NA 1 obese NA Obese
-NA NA 190965006 NA NA NA 293634015 200 C3801 C380100 "Drug-induced obesity" 293634015 NA 5 obese NA Obese
-NA NA 1572931000006109 NA NA NA 1572931000006113 200 EMISNQRE67 NA "Refuses obesity monitoring" 1572931000006113 NA 32 obese NA Obese
-NA NA 170797005 NA NA NA 4636861000006111 200 ^ESCTHA463686 NA "Has seen dietitian - obesity" 264755013 NA 1 obese NA Obese
+additional NA 170807005 NA NA NA 264768017 200 66CE 66CE.00 "Reason for obesity therapy - occupational" 264768017 NA 1 obese NA Obese
+additional NA 190965006 NA NA NA 293634015 200 C3801 C380100 "Drug-induced obesity" 293634015 NA 5 obese NA Obese
+additional NA 1572931000006109 NA NA NA 1572931000006113 200 EMISNQRE67 NA "Refuses obesity monitoring" 1572931000006113 NA 32 obese NA Obese
+additional NA 170797005 NA NA NA 4636861000006111 200 ^ESCTHA463686 NA "Has seen dietitian - obesity" 264755013 NA 1 obese NA Obese
 BMIHEALTHY_COD "Body mass index (BMI) healthy codes" 920181000000105 "Child body mass index on 2nd centile (finding)" 999016011000230101 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2362061000000117 100 22K94 22K9400 "Child body mass index on 2nd centile" 2362061000000117 NA 2 NA NA "Not obese"
-NA NA 1808061000006105 NA NA NA 1808061000006114 100 EMISNQBO29 NA "Body mass index less than 18.5" 1808061000006114 NA 2 "not obese" NA "Not obese"
+additional NA 1808061000006105 NA NA NA 1808061000006114 100 EMISNQBO29 NA "Body mass index less than 18.5" 1808061000006114 NA 2 "not obese" NA "Not obese"
 BMIOVER_COD "Body mass index (BMI) overweight codes" 722595002 "Overweight in adulthood with body mass index of 25 or more but less than 30 (finding)" 999016091000230107 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 7833991000006118 90 ^ESCTOV783399 NA "Overweight in adulthood with body mass index of 25 or more but less than 30" 3332833014 NA 2 NA NA "Not obese"
-NA NA 414916001 NA NA NA 293802014 80 Cyu7 Cyu7.00 "[X]Obesity and other hyperalimentation" 2535065012 NA 32 obese NA Obese
-NA NA 1269761000000101 NA NA NA 14518971000006110 80 ^ESCT1451897 NA "Focal segmental glomerulosclerosis due to obesity" 2796111000000115 NA 32 obese NA Obese
+additional NA 414916001 NA NA NA 293802014 80 Cyu7 Cyu7.00 "[X]Obesity and other hyperalimentation" 2535065012 NA 32 obese NA Obese
+additional NA 1269761000000101 NA NA NA 14518971000006110 80 ^ESCT1451897 NA "Focal segmental glomerulosclerosis due to obesity" 2796111000000115 NA 32 obese NA Obese
 BMIUNDER_COD "Body mass index (BMI) underweight codes" 920141000000102 "Child body mass index less than 0.4th centile (finding)" 999016131000230105 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 2361941000000112 60 22K92 22K9200 "Child body mass index less than 0.4th centile" 2361941000000112 NA 2 NA NA "Not obese"
 BMIUNDER_COD "Body mass index (BMI) underweight codes" 427090001 "Body mass index less than 16.5 (finding)" 999016131000230105 "NCD Tackling Health Inequalities | Other LDD | PLE GDPPR | QOF Mental health" 7068841000006116 40 ^ESCTBO706884 NA "Body mass index less than 16.5" 2673915012 NA 2 NA NA "Not obese"
-NA NA 914801000000107 NA NA NA 2350501000000116 40 8CV7 8CV7.00 "Anti-obesity drug therapy commenced" 2350501000000116 NA 32 obese NA Obese
-NA NA 83911000119104 NA NA NA 8024931000006112 40 ^ESCTSE802493 NA "Severe obesity" 3289704018 NA 31 obese NA Obese
-NA NA 822741000000107 NA NA NA 8270211000006112 40 ^ESCTAN827021 NA "Anti-obesity drug therapy" 2141861000000117 NA 31 obese NA Obese
+additional NA 914801000000107 NA NA NA 2350501000000116 40 8CV7 8CV7.00 "Anti-obesity drug therapy commenced" 2350501000000116 NA 32 obese NA Obese
+additional NA 83911000119104 NA NA NA 8024931000006112 40 ^ESCTSE802493 NA "Severe obesity" 3289704018 NA 31 obese NA Obese
+additional NA 822741000000107 NA NA NA 8270211000006112 40 ^ESCTAN827021 NA "Anti-obesity drug therapy" 2141861000000117 NA 31 obese NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 408512008 "Body mass index 40+ - severely obese (finding)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 6763391000006114 30 ^ESCTBO676339 NA "Body mass index 40+ - morbidly obese" 3005953017 NA 2 NA NA Obese
-NA NA 907161000006104 NA NA NA 907161000006115 30 HNG0212 NA "[RFC] Obesity" 907161000006115 NA 12 obese NA Obese
-NA NA 898011000000103 NA NA NA 2310101000000115 30 66CX 66CX.00 "Obesity multidisciplinary case review" 2310101000000115 NA 1 obese NA Obese
-NA NA 715279006 NA NA NA 2423851000000119 30 66Ce 66Ce.00 "Telehealth obesity monitoring" 3302073018 NA 1 obese NA Obese
-NA NA 248311001 NA NA NA 5255821000006118 30 ^ESCTTR525582 NA "Truncal obesity" 370696012 NA 32 obese NA Obese
+additional NA 907161000006104 NA NA NA 907161000006115 30 HNG0212 NA "[RFC] Obesity" 907161000006115 NA 12 obese NA Obese
+additional NA 898011000000103 NA NA NA 2310101000000115 30 66CX 66CX.00 "Obesity multidisciplinary case review" 2310101000000115 NA 1 obese NA Obese
+additional NA 715279006 NA NA NA 2423851000000119 30 66Ce 66Ce.00 "Telehealth obesity monitoring" 3302073018 NA 1 obese NA Obese
+additional NA 248311001 NA NA NA 5255821000006118 30 ^ESCTTR525582 NA "Truncal obesity" 370696012 NA 32 obese NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 788996008 "Obesity in adolescence (disorder)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 13911231000006116 20 ^ESCT1391123 NA "Obesity in adolescence" 3786365014 NA 32 NA NA Obese
-NA NA 22910008 NA NA NA 2865221000006115 20 ^ESCTIM286522 NA "Impaired glucose tolerance in obese" 38465017 NA 32 obese NA Obese
-NA NA 243862009 NA NA NA 5192431000006115 20 ^ESCTOB519243 NA "Obesity monitoring status" 364697010 NA 31 obese NA Obese
-NA NA 249533007 NA NA NA 5273061000006119 20 ^ESCTOB527306 NA "Obese abdomen" 372311018 NA 31 obese NA Obese
-NA NA 763085007 NA NA NA 14679381000006117 20 ^ESCT1467938 NA "Obesity monitoring declined" 4590703019 NA 37 obese NA Obese
+additional NA 22910008 NA NA NA 2865221000006115 20 ^ESCTIM286522 NA "Impaired glucose tolerance in obese" 38465017 NA 32 obese NA Obese
+additional NA 243862009 NA NA NA 5192431000006115 20 ^ESCTOB519243 NA "Obesity monitoring status" 364697010 NA 31 obese NA Obese
+additional NA 249533007 NA NA NA 5273061000006119 20 ^ESCTOB527306 NA "Obese abdomen" 372311018 NA 31 obese NA Obese
+additional NA 763085007 NA NA NA 14679381000006117 20 ^ESCT1467938 NA "Obesity monitoring declined" 4590703019 NA 37 obese NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 408512008 "Body mass index 40+ - severely obese (finding)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 6763401000006111 1 ^ESCTBM676340 NA "BMI (body mass index) 40+ - severely obese" 2227961000000118 NA 2 NA NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 819948005 "Obese class III (finding)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 13926691000006118 1 ^ESCT1392669 NA "Obese class III (body mass index equal to or greater than 40.0)" 2836451000000118 NA 2 NA NA Obese
 BMI30_COD "Body mass index (BMI) codes >= 30 without an associated BMI value" 162690006 "On examination - obese (finding)" 999011051000230106 "INLIQ Obesity | NCD Personalised Care | NCD Tackling Health Inequalities | PLE GDPPR | QOF Mental health | QOF Obesity" 4550451000006118 1 ^ESCTON455045 NA "On examination - obese" 2666174013 NA 27 NA NA Obese
