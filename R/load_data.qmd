@@ -29,14 +29,17 @@ con <- dbConnect(RMariaDB::MariaDB(),
                  password = "password")
 ```
 
-
 ```{r}
-# Function to create tables for condition
-
-create_table <- function(cohort_def_var, con) {
-    query <- glue("
-        CREATE TABLE p068_{cohort_def_var}_define (
-        	patid VARCHAR(19),
+# Write function to read data into temporary file, filter and only permanently load for records from patid of interest
+load_data <- function(con, n, filename, cohort_def_var, extra_grouping_var, categories) {
+    
+    # Drop temporary table if exists
+    dbExecute(con, "DROP TEMPORARY TABLE IF EXISTS temp;")
+    dbExecute(con, "DROP TEMPORARY TABLE IF EXISTS df;")
+    
+    # Create temp tables
+    dbExecute(con, "CREATE TEMPORARY TABLE temp (
+            patid VARCHAR(19),
             pracid INT,
             obsid VARCHAR(19) PRIMARY KEY,
             obsdate DATE,
@@ -44,21 +47,9 @@ create_table <- function(cohort_def_var, con) {
             value FLOAT,
             numunitid INT,
             obstypeid INT
-        );")
+    );")
     
-    dbExecute(con, query)
-}
-```
-
-```{r}
-# Write function to read data into temporary file, filter and only permanently load for records from patid of interest
-load_data <- function(n, filename, cohort_def_var, con) {
-    
-    # Drop temporary table if exists
-    dbExecute(con, "DROP TEMPORARY TABLE IF EXISTS temp;")
-    
-    # Create temp table
-    dbExecute(con, glue("CREATE TEMPORARY TABLE temp LIKE p068_{cohort_def_var}_define;"))
+    dbExecute(con, glue("CREATE TEMPORARY TABLE df LIKE temp;"))
     
     # Load data into temporary table
     load_query <- glue("LOAD DATA LOCAL INFILE '{here()}/data/{filename}_{sprintf('%03d', n)}.txt'
@@ -79,23 +70,93 @@ load_data <- function(n, filename, cohort_def_var, con) {
     
     dbExecute(con, load_query)
     
-    # Keep only rows from cohort into permanent table
-    insert_query <- glue("INSERT INTO p068_{cohort_def_var}_define (patid, pracid, obsid, obsdate, medcodeid, value, numunitid, obstypeid)
+    # Keep only rows from cohort into temp df table
+    cohort_only_query <- glue("INSERT INTO df (patid, pracid, obsid, obsdate, medcodeid, value, numunitid, obstypeid)
         SELECT patid, pracid, obsid, obsdate, medcodeid, value, numunitid, obstypeid FROM temp
         WHERE patid IN (
             SELECT patid
             FROM p068_cohort_43_84
         );")
     
-    dbExecute(con, insert_query)
+    dbExecute(con, cohort_only_query)
+    
+    # Save number of rows in temp df table
+    temp_df_rows <- dbGetQuery(con, glue("SELECT COUNT(*) FROM df;")) %>% slice(1) %>% pluck(1)
     
     # Drop temporary table
     dbExecute(con, "DROP TABLE temp;")
     
+    # Keep latest record per patient
+    latest_rec_query <- glue("CREATE TABLE latest AS (
+        WITH t AS ( -- Join df to medcode, numunitid and obstypeid dictionaries
+            SELECT d.patid,
+                d.pracid,
+                d.obsid,
+                d.obsdate,
+                d.medcodeid,
+                c.term AS medcodeid_desc,
+                d.value,
+                n.description AS numunitid,
+                o.description AS obstypeid,
+                c.include, 
+                c.category, 
+                c.cluster_id
+            FROM df AS d
+            -- Label units
+            LEFT JOIN lookup_numunitid AS n ON d.numunitid = n.code
+            -- Label obstype
+            LEFT JOIN lookup_obstypeid AS o ON d.obstypeid = o.code
+            -- Label medcodes
+            LEFT JOIN (
+                SELECT *
+                FROM p068_codes
+                WHERE category IN ({categories})
+                ) AS c ON d.medcodeid = c.medcodeid
+            -- Drop records where obstype is 1 - Allergy or 4 - Family history
+            WHERE d.obstypeid NOT IN (1, 4)
+            ),
+        u AS ( -- Union with existing table, data previously loaded
+            SELECT * FROM t
+            UNION
+            SELECT * FROM p068_{cohort_def_var}_define
+        ),
+        r AS ( -- Calculate latest record for each patient and grouping
+            SELECT *,
+                ROW_NUMBER() OVER (PARTITION BY patid, {extra_grouping_var} ORDER BY obsdate DESC) AS rn
+            FROM u
+        )
+        SELECT patid,
+            pracid,
+            obsid,
+            obsdate,
+            medcodeid,
+            medcodeid_desc,
+            value,
+            numunitid,
+            obstypeid,
+            include,
+            category,
+            cluster_id
+        FROM r
+        WHERE rn = 1
+        );
+        "
+    )
+
+    dbExecute(con, latest_rec_query)
+    
+    # Drop temp df table 
+    dbExecute(con, "DROP TABLE df;")
+    
+    # Replace p068_{cohort_def_var}_define with latest
+    dbExecute(con, glue("DROP TABLE p068_{cohort_def_var}_define;"))
+    
+    dbExecute(con, glue("ALTER TABLE latest RENAME p068_{cohort_def_var}_define;"))
+    
     # Print number of rows in table
     df_rows <- dbGetQuery(con, glue("SELECT COUNT(*) FROM p068_{cohort_def_var}_define;")) %>% slice(1) %>% pluck(1)
     
-    print(glue("After file {n}: {df_rows} rows"))
+    print(glue("After file {n}: {temp_df_rows} rows in file, {df_rows} rows retained overall"))
 }
 ```
 
@@ -105,25 +166,71 @@ load_data <- function(n, filename, cohort_def_var, con) {
 # Set parameters
 cohort_def_var <- "smoking"
 filename <- "smoking_Define_Inc1_Observation"
-file_seq <- 26:67
+extra_grouping_var <- paste0(c("cluster_id"), collapse = ", ")
+categories <- paste0(paste0("'", c("Smoking status", "Current smoker"), "'"), collapse = ", ")
 
-# Create table
-create_table(cohort_def_var, con)
+# Create define table
+dbExecute(con, glue("CREATE TABLE p068_{cohort_def_var}_define (
+            patid VARCHAR(19),
+            pracid INT,
+            obsid VARCHAR(19) PRIMARY KEY,
+            obsdate DATE,
+            medcodeid VARCHAR(18),
+            medcodeid_desc VARCHAR(240),
+            value FLOAT,
+            numunitid INT,
+            obstypeid INT,
+	        include VARCHAR(25),
+            category VARCHAR(50),
+            cluster_id VARCHAR(25)
+    );"))
 
 # Check table created
 dbGetQuery(con, glue("DESCRIBE p068_{cohort_def_var}_define;"))
-
-# Run function to read all data
-walk(file_seq, \(x) load_data(n = x, filename, cohort_def_var, con))
 ```
 
 ```{r}
-# Keep one record per person for each grouping of smoking codes
+# Specify which files
+file_seq <- 4:67
+
+# Run function to read all data
+walk(file_seq, \(x) load_data(n = x, con = con, filename = filename, cohort_def_var = cohort_def_var, extra_grouping_var = extra_grouping_var, categories = categories))
+```
+
+```{r}
+# dbExecute(con, "DROP TABLE IF EXISTS test;")
+# dbGetQuery(con, glue("DESCRIBE latest;"))
+```
+
+
+```{r}
+# Load codelist
 codelist_file <- "smoking_cprd_plus.txt"
 
-codelist <- read_delim(here("codes", codelist_file), col_types = "cc____c___c___c_c") %>% 
-    mutate(cluster_id = if_else(is.na(cluster_id), "additional", cluster_id))
+# Load codelist into p068_codes dictionary
+load_dict_query <- glue("LOAD DATA LOCAL INFILE '{here('codes', codelist_file)}'
+    INTO TABLE p068_codes 
+    FIELDS TERMINATED BY ' '
+    ENCLOSED BY '\"'
+    LINES TERMINATED BY '\\n'
+    IGNORE 1 ROWS 
+    (@cluster_id, @cluster_description, @dummy, @dummy, @dummy, @dummy, @medcodeid, @dummy, @dummy, @dummy, @term, @dummy, @dummy, @dummy, @include, @dummy, @category) 
+    SET
+    	cluster_id = NULLIF(@cluster_id,''), 
+        cluster_description = NULLIF(@cluster_description,''),  
+        medcodeid = NULLIF(@medcodeid,''), 
+        term = NULLIF(@term,''), 
+        include = NULLIF(@include,''),  
+        category = NULLIF(@category,'');"
+    )
+
+# Run
+dbExecute(con, load_dict_query)
+
+# Check if loaded properly
+dbGetQuery(con, "SELECT DISTINCT category FROM p068_codes;")
 ```
+
 
 
 ```{r}
