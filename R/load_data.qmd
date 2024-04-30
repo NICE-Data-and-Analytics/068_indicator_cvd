@@ -31,14 +31,19 @@ con <- dbConnect(RMariaDB::MariaDB(),
 
 ```{r}
 # Write function to read data into temporary file, filter and only permanently load for records from patid of interest
-load_data <- function(con, n, filename, cohort_def_var, extra_grouping_var, categories) {
+load_data <- function(con, project_id, n, filename, cohort_def_var, grouping_var, categories) {
+    
+    # Create row counter to sum all rows read
+    if (!exists("counter")) {
+        counter <- 0
+    }
     
     # Drop temporary table if exists
-    dbExecute(con, "DROP TEMPORARY TABLE IF EXISTS temp;")
-    dbExecute(con, "DROP TEMPORARY TABLE IF EXISTS df;")
+    dbExecute(con, glue("DROP TEMPORARY TABLE IF EXISTS {project_id}_temp;"))
+    dbExecute(con, glue("DROP TEMPORARY TABLE IF EXISTS {project_id}_df;"))
     
     # Create temp tables
-    dbExecute(con, "CREATE TEMPORARY TABLE temp (
+    dbExecute(con, glue("CREATE TEMPORARY TABLE {project_id}_temp (
             patid VARCHAR(19),
             pracid INT,
             obsid VARCHAR(19) PRIMARY KEY,
@@ -47,13 +52,13 @@ load_data <- function(con, n, filename, cohort_def_var, extra_grouping_var, cate
             value FLOAT,
             numunitid INT,
             obstypeid INT
-    );")
+    );"))
     
-    dbExecute(con, glue("CREATE TEMPORARY TABLE df LIKE temp;"))
+    dbExecute(con, glue("CREATE TEMPORARY TABLE {project_id}_df LIKE {project_id}_temp;"))
     
     # Load data into temporary table
     load_query <- glue("LOAD DATA LOCAL INFILE '{here()}/data/{filename}_{sprintf('%03d', n)}.txt'
-            INTO TABLE temp
+            INTO TABLE {project_id}_temp
             FIELDS TERMINATED BY '\\t'
             LINES TERMINATED BY '\\r\\n'
             IGNORE 1 ROWS 
@@ -71,23 +76,25 @@ load_data <- function(con, n, filename, cohort_def_var, extra_grouping_var, cate
     dbExecute(con, load_query)
     
     # Keep only rows from cohort into temp df table
-    cohort_only_query <- glue("INSERT INTO df (patid, pracid, obsid, obsdate, medcodeid, value, numunitid, obstypeid)
-        SELECT patid, pracid, obsid, obsdate, medcodeid, value, numunitid, obstypeid FROM temp
+    cohort_only_query <- glue("INSERT INTO {project_id}_df (patid, pracid, obsid, obsdate, medcodeid, value, numunitid, obstypeid)
+        SELECT patid, pracid, obsid, obsdate, medcodeid, value, numunitid, obstypeid FROM {project_id}_temp
         WHERE patid IN (
             SELECT patid
-            FROM p068_cohort_43_84
+            FROM {project_id}_cohort_43_84
         );")
     
     dbExecute(con, cohort_only_query)
     
     # Save number of rows in temp df table
-    temp_df_rows <- dbGetQuery(con, glue("SELECT COUNT(*) FROM df;")) %>% slice(1) %>% pluck(1)
+    temp_df_rows <- dbGetQuery(con, glue("SELECT COUNT(*) FROM {project_id}_df;")) %>% slice(1) %>% pluck(1)
+    
+    counter <- counter + temp_df_rows
     
     # Drop temporary table
-    dbExecute(con, "DROP TABLE temp;")
+    dbExecute(con, glue("DROP TABLE {project_id}_temp;"))
     
     # Keep latest record per patient
-    latest_rec_query <- glue("CREATE TABLE latest AS (
+    latest_rec_query <- glue("CREATE TABLE latest
         WITH t AS ( -- Join df to medcode, numunitid and obstypeid dictionaries
             SELECT d.patid,
                 d.pracid,
@@ -101,7 +108,7 @@ load_data <- function(con, n, filename, cohort_def_var, extra_grouping_var, cate
                 c.include, 
                 c.category, 
                 c.cluster_id
-            FROM df AS d
+            FROM {project_id}_df AS d
             -- Label units
             LEFT JOIN lookup_numunitid AS n ON d.numunitid = n.code
             -- Label obstype
@@ -109,7 +116,7 @@ load_data <- function(con, n, filename, cohort_def_var, extra_grouping_var, cate
             -- Label medcodes
             LEFT JOIN (
                 SELECT *
-                FROM p068_codes
+                FROM {project_id}_codes
                 WHERE category IN ({categories})
                 ) AS c ON d.medcodeid = c.medcodeid
             -- Drop records where obstype is 1 - Allergy or 4 - Family history
@@ -118,11 +125,11 @@ load_data <- function(con, n, filename, cohort_def_var, extra_grouping_var, cate
         u AS ( -- Union with existing table, data previously loaded
             SELECT * FROM t
             UNION
-            SELECT * FROM p068_{cohort_def_var}_define
+            SELECT * FROM {project_id}_{cohort_def_var}_define
         ),
         r AS ( -- Calculate latest record for each patient and grouping
             SELECT *,
-                ROW_NUMBER() OVER (PARTITION BY patid, {extra_grouping_var} ORDER BY obsdate DESC) AS rn
+                ROW_NUMBER() OVER (PARTITION BY {grouping_var} ORDER BY obsdate DESC) AS rn
             FROM u
         )
         SELECT patid,
@@ -138,74 +145,33 @@ load_data <- function(con, n, filename, cohort_def_var, extra_grouping_var, cate
             category,
             cluster_id
         FROM r
-        WHERE rn = 1
-        );
+        WHERE rn = 1;
         "
     )
 
     dbExecute(con, latest_rec_query)
     
     # Drop temp df table 
-    dbExecute(con, "DROP TABLE df;")
+    dbExecute(con, glue("DROP TABLE {project_id}_df;"))
     
-    # Replace p068_{cohort_def_var}_define with latest
-    dbExecute(con, glue("DROP TABLE p068_{cohort_def_var}_define;"))
+    # Replace {project_id}_{cohort_def_var}_define with latest
+    dbExecute(con, glue("DROP TABLE {project_id}_{cohort_def_var}_define;"))
     
-    dbExecute(con, glue("ALTER TABLE latest RENAME p068_{cohort_def_var}_define;"))
+    dbExecute(con, glue("ALTER TABLE latest RENAME {project_id}_{cohort_def_var}_define;"))
     
     # Print number of rows in table
-    df_rows <- dbGetQuery(con, glue("SELECT COUNT(*) FROM p068_{cohort_def_var}_define;")) %>% slice(1) %>% pluck(1)
+    df_rows <- dbGetQuery(con, glue("SELECT COUNT(*) FROM {project_id}_{cohort_def_var}_define;")) %>% slice(1) %>% pluck(1)
     
-    print(glue("After file {n}: {temp_df_rows} rows in file, {df_rows} rows retained overall"))
+    print(glue("After file {n}: {temp_df_rows} rows in file; {counter} rows read so far, {df_rows} rows retained overall"))
 }
 ```
 
-```{r}
-# Run queries
-
-# Set parameters
-cohort_def_var <- "smoking"
-filename <- "smoking_Define_Inc1_Observation"
-extra_grouping_var <- paste0(c("cluster_id"), collapse = ", ")
-categories <- paste0(paste0("'", c("Smoking status", "Current smoker"), "'"), collapse = ", ")
-
-# Create define table
-dbExecute(con, glue("CREATE TABLE p068_{cohort_def_var}_define (
-            patid VARCHAR(19),
-            pracid INT,
-            obsid VARCHAR(19) PRIMARY KEY,
-            obsdate DATE,
-            medcodeid VARCHAR(18),
-            medcodeid_desc VARCHAR(240),
-            value FLOAT,
-            numunitid INT,
-            obstypeid INT,
-	        include VARCHAR(25),
-            category VARCHAR(50),
-            cluster_id VARCHAR(25)
-    );"))
-
-# Check table created
-dbGetQuery(con, glue("DESCRIBE p068_{cohort_def_var}_define;"))
-```
 
 ```{r}
-# Specify which files
-file_seq <- 4:67
+#| eval: false
 
-# Run function to read all data
-walk(file_seq, \(x) load_data(n = x, con = con, filename = filename, cohort_def_var = cohort_def_var, extra_grouping_var = extra_grouping_var, categories = categories))
-```
-
-```{r}
-# dbExecute(con, "DROP TABLE IF EXISTS test;")
-# dbGetQuery(con, glue("DESCRIBE latest;"))
-```
-
-
-```{r}
 # Load codelist
-codelist_file <- "smoking_cprd_plus.txt"
+codelist_file <- "bmival_cprd_plus.txt"
 
 # Load codelist into p068_codes dictionary
 load_dict_query <- glue("LOAD DATA LOCAL INFILE '{here('codes', codelist_file)}'
@@ -229,9 +195,60 @@ dbExecute(con, load_dict_query)
 
 # Check if loaded properly
 dbGetQuery(con, "SELECT DISTINCT category FROM p068_codes;")
+
+dbGetQuery(con, "SELECT DISTINCT cluster_id FROM p068_codes;")
+```
+
+```{r}
+# Run queries
+
+# Set parameters
+cohort_def_var <- "obesity"
+filename <- "obesity_Define_Inc1_Observation"
+grouping_var <- paste0(c("patid", "cluster_id"), collapse = ", ")
+categories <- paste0(paste0("'", c("Obese", "Not obese"), "'"), collapse = ", ")
+
+# Create define table
+dbExecute(con, glue("CREATE TABLE p068_{cohort_def_var}_define (
+            patid VARCHAR(19),
+            pracid INT,
+            obsid VARCHAR(19) PRIMARY KEY,
+            obsdate DATE,
+            medcodeid VARCHAR(18),
+            medcodeid_desc VARCHAR(240),
+            value FLOAT,
+            numunitid INT,
+            obstypeid INT,
+	        include VARCHAR(25),
+            category VARCHAR(50),
+            cluster_id VARCHAR(25)
+    );"))
+
+# Check table created
+dbGetQuery(con, glue("DESCRIBE p068_{cohort_def_var}_define;"))
+```
+
+```{r}
+# Specify which files
+file_seq <- 1:3
+
+# Run function to read all data
+walk(file_seq, \(x) load_data(n = x, project_id = "p068", con = con, filename = filename, cohort_def_var = cohort_def_var, grouping_var = grouping_var, categories = categories))
 ```
 
 
+```{r}
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+
+```
+
+```{r}
+# dbExecute(con, "DROP TABLE IF EXISTS test;")
+# dbGetQuery(con, glue("DESCRIBE latest;"))
+```
 
 ```{r}
 # Write cohort IDs to text file
@@ -264,7 +281,7 @@ dbGetQuery(con, "SELECT DISTINCT category FROM p068_codes;")
 #     before <- dbGetQuery(con, glue("SELECT COUNT(*) FROM {i};")) %>% slice(1) %>% pluck(1)
 #     
 #     # Keep only records for cohort and columns of interest
-#     dbExecute(con, glue("CREATE TABLE temp_def (
+#     dbExecute(con, glue("CREATE TABLE temp_def
 #         SELECT
 #             patid,
 #             pracid,
@@ -277,8 +294,7 @@ dbGetQuery(con, "SELECT DISTINCT category FROM p068_codes;")
 #         FROM {i}
 #         WHERE patid IN (
 #             SELECT patid FROM p068_cohort_43_84
-#         )
-#     );"))
+#         );"))
 #     
 #     # Drop original define table
 #     dbExecute(con, glue("DROP TABLE {i};"))
@@ -295,7 +311,6 @@ dbGetQuery(con, "SELECT DISTINCT category FROM p068_codes;")
 
 
 ```
-
 
 ```{r}
 # Disconnect database
