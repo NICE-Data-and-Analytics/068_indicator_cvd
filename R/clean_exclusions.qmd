@@ -1,0 +1,513 @@
+---
+title: "clean_exclusions"
+format: html
+---
+
+```{r}
+# Set time zone
+Sys.setenv(TZ='Europe/London')
+
+# Download and attach standard packages
+if (!require(pacman)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(tidyverse, here, janitor, RMariaDB, DBI, glue, renv, dbplyr, lubridate)
+
+i_am("R/clean_exclusions.qmd")
+```
+
+```{r}
+# Connect to CPRD database -------------------
+
+# Connect to the MySQL database: con
+con <- dbConnect(RMariaDB::MariaDB(), 
+                 dbname = "cprd2023", 
+                 host = "cprd-sea-2023.cisllnygqz7r.eu-west-2.rds.amazonaws.com", 
+                 port = 3306,
+                 user = "test",
+                 password = "password")
+```
+
+## Previous CVD risk assessment >=20%
+
+```{r}
+# Check cluster_ids for CVD risk assessment
+
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category IN ('CVD risk assessment');")
+```
+
+
+```{r}
+cohort_def_var <- "cvdriskass"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+
+```
+
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 10;"))
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category IN ('CVD risk assessment');")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+# Create a table from table in mySQL
+cvdriskass_df <- tbl(con, "p068_cvdriskass_define")
+```
+
+```{r}
+# Count obstypeid
+cvdriskass_df %>% 
+    count(obstypeid) %>% 
+    arrange(desc(n))
+```
+
+```{r}
+# Count numunitid
+cvdriskass_df %>% 
+    count(numunitid) %>% 
+    arrange(desc(n))
+```
+
+```{r}
+# Examine values
+# Some negative values and some very large values
+cvdriskass_df %>% 
+    summarise(min = min(value, na.rm = T),
+              mean = mean(value, na.rm = T),
+              max = max(value, na.rm = T),
+              n = n(),
+              n_na = sum(is.na(value), na.rm = T))
+
+cvdriskass_df %>% 
+    filter(between(value, 0, 100)) %>% 
+    summarise(min = min(value, na.rm = T),
+              mean = mean(value, na.rm = T),
+              max = max(value, na.rm = T),
+              n = n(),
+              n_na = sum(is.na(value), na.rm = T))
+
+
+```
+
+```{r}
+# Plot distribution
+cvdriskass_df %>% 
+    filter(between(value, 0, 100), !is.na(value)) %>% 
+    collect() %>% 
+    ggplot(aes(x = value)) +
+    geom_histogram(binwidth = 1) +
+    scale_x_continuous(breaks = seq(0,100,5))
+```
+
+```{r}
+# Potential for values to be recorded as decimals rather than percentages
+# Would need to adjust threshold
+dbGetQuery(con, "SELECT *
+    FROM p068_cvdriskass_define
+    WHERE value > 0 and value < 1
+    LIMIT 100;")
+
+# See units for records with value between 0 and 1
+
+cvdriskass_df %>% 
+    filter(value > 0, value < 1) %>%
+    count(numunitid) %>% 
+    arrange(desc(n))
+
+# Mostly % so no need to adjust threshold now
+```
+
+
+```{r}
+# Create cvdriskass exclusion table
+
+# All records of 10-year risk score 20% or more prior to 2020-04
+#   Will need to filter on obsdate for 2018-04 for IND2023-165 and IND2023-166
+#     Using one table only as don't want to hog space
+# Exclude risk assessments that have units in years
+# 	May want to drop more units - some are unintelligable
+# Exclude records specifically recording heart age or 5 year risk
+# 	Only want 10-year risk
+# 	Assumes medcodes that don't specify 5/10-year risk are recording 10 year risk
+
+dbExecute(con, "DROP TABLE IF EXISTS p068_cvdriskass_exclusion;")
+
+
+cvdriskass_previous_20ormore_qry <- "CREATE TABLE p068_cvdriskass_exclusion AS
+    WITH temp AS (
+    	SELECT c.*,
+    		ROW_NUMBER() OVER (PARTITION BY patid ORDER BY obsdate DESC) AS rn
+    	FROM p068_cvdriskass_define AS c
+        -- Drop records with units in years
+    	WHERE numunitid NOT IN ('year', 'years')
+        -- Drop records recording heart age or 5 year risk
+    	AND medcodeid NOT IN ('2115691000000116', -- QRISK2 calculated heart age
+    		'2115711000000119', -- Difference between actual and QRISK2 calculated heart age
+    		'434881000006116', -- 5 yr CHD risk (Framingham)
+    		'459503011', -- Framingham Coronary Heart Disease 5 year risk score
+    		'987511000006110' -- Joint British Societies cardiovascular disease 5 yr risk score
+    	)
+    	-- Only the records before the time period the indicators are interested in
+    	AND obsdate < '2020-04-01'
+        -- Score thresholds
+    	AND (value BETWEEN 20 AND 100
+    		OR medcodeid IN (
+    			'977791000006118', -- JBS score 20-30%
+    			'977801000006117' -- JBS score >30%
+    		)
+    	)
+    )
+    SELECT * FROM temp WHERE rn = 1;"
+
+dbExecute(con, cvdriskass_previous_20ormore_qry)
+```
+```{r}
+# Examine exclusion table
+
+# Number of records and number of individual patients
+tbl(con, "p068_cvdriskass_exclusion") %>% 
+    summarise(n_pat = n_distinct(patid),
+              n = n())
+
+# Check distribution of values
+tbl(con, "p068_cvdriskass_exclusion") %>% 
+    collect() %>% 
+    ggplot(aes(x = value)) +
+    geom_histogram(binwidth = 1) +
+    scale_x_continuous(breaks = seq(0,100,5))
+```
+## CVD
+
+```{r}
+# Check cluster_ids for CVD risk assessment
+
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category IN ('CHD', 'Stroke', 'PAD', 'TIA');")
+```
+
+
+```{r}
+cohort_def_var <- "cvd"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+
+```
+
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows, medcodeid 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 10;"))
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category IN ('CHD', 'Stroke', 'PAD', 'TIA');")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+# Create a table from table in mySQL
+cvd_df <- tbl(con, "p068_cvd_define")
+```
+
+```{r}
+# Count obstypeid
+cvd_df %>% 
+    count(obstypeid) %>% 
+    arrange(desc(n))
+```
+
+```{r}
+# Count category
+cvd_df %>% 
+    count(category) %>% 
+    arrange(desc(n))
+```
+
+```{r}
+# Rename this table as exclusion
+dbExecute(con, "ALTER TABLE p068_cvd_define RENAME p068_cvd_exclusion;")
+
+dbGetQuery(con, "SELECT COUNT(*) FROM p068_cvd_exclusion;")
+```
+## Familial hypercholesterolaemia
+
+Any record of familial hypercholesterolaemia on or before the end date
+
+```{r}
+# Check cluster_ids for CVD risk assessment
+
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category IN ('Familial hypercholesterolaemia');")
+```
+
+
+```{r}
+cohort_def_var <- "fhyp"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+
+```
+
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows, medcodeid 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 10;"))
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category IN ('Familial hypercholesterolaemia');")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+# Count obstypeid
+tbl(con, "p068_fhyp_define") %>% 
+    count(obstypeid) %>% 
+    arrange(desc(n))
+```
+
+```{r}
+# Refine for exclusion
+
+# Drop records for suspected and possible FH
+# 1659061000000112 Possible familial hypercholesterolaemia
+# 7483481000006112 Possible familial hypercholesterolemia
+# 8192861000006119 Possible heterozygous familial hypercholesterolaemia
+# 7510431000006112 Suspected heterozygous familial hypercholesterolaemia
+
+dbExecute(con, "DROP TABLE IF EXISTS p068_fhyp_exclusion")
+
+dbExecute(con, "CREATE TABLE p068_fhyp_exclusion
+    SELECT *
+    FROM p068_fhyp_define
+    WHERE medcodeid NOT IN ('1659061000000112', '7483481000006112', '8192861000006119', '7510431000006112');")
+```
+
+```{r}
+# Check
+dbGetQuery(con, "SELECT COUNT(*) FROM p068_fhyp_exclusion;")
+
+tbl(con, "p068_fhyp_exclusion") %>% 
+    count(medcodeid_desc) %>% 
+    arrange(desc(n))
+```
+
+## Chronic kidney disease
+
+CKD stage 3a to 5 – any record of CKD stage 3 to 5, 
+with no subsequent code for CKD resolved or CKD stage 1 to 2, 
+on or before the end date
+
+```{r}
+# Check cluster_ids for CVD risk assessment
+
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category LIKE '%CKD%';")
+```
+
+
+```{r}
+cohort_def_var <- "ckd"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+
+```
+
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows, medcodeid 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 10;"))
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category LIKE '%CKD%';")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+# Count obstypeid
+tbl(con, "p068_ckd_define") %>% 
+    count(obstypeid) %>% 
+    arrange(desc(n))
+```
+```{r}
+tbl(con, "p068_ckd_define") %>% 
+    count(category) %>% 
+    arrange(desc(n))
+```
+
+
+```{r}
+# Refine for exclusion
+
+# Drop records where CKD resolved or CKD stage 1 and 2 is the latest CKD record
+
+dbExecute(con, "DROP TABLE IF EXISTS p068_ckd_exclusion")
+
+dbExecute(con, "CREATE TABLE p068_ckd_exclusion
+    SELECT *
+    FROM p068_ckd_define
+    WHERE category IN ('CKD stage 3 to 5');")
+```
+```{r}
+# Check
+dbGetQuery(con, "SELECT COUNT(*) FROM p068_ckd_exclusion;")
+
+tbl(con, "p068_ckd_exclusion") %>% 
+    count(medcodeid_desc) %>% 
+    arrange(desc(n))
+```
+## Type 1 diabetes
+
+```{r}
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category IN ('Type 1 diabetes');")
+```
+
+
+```{r}
+cohort_def_var <- "t1dm"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+
+```
+
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows, medcodeid 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 10;"))
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category IN ('Type 1 diabetes');")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+# Count obstypeid
+tbl(con, "p068_t1dm_define") %>% 
+    count(obstypeid) %>% 
+    arrange(desc(n))
+```
+
+```{r}
+tbl(con, "p068_t1dm_define") %>% 
+    count(category) %>% 
+    arrange(desc(n))
+```
+
+
+```{r}
+# Rename table as exclusion
+dbExecute(con, "DROP TABLE IF EXISTS p068_t1dm_exclusion;")
+
+dbExecute(con, "ALTER TABLE p068_t1dm_define RENAME p068_t1dm_exclusion;")
+```
+
+```{r}
+# Check
+dbGetQuery(con, "SELECT COUNT(*) FROM p068_t1dm_exclusion;")
+```
+
+```{r}
+# Disconnect database
+dbDisconnect(con)
+```
