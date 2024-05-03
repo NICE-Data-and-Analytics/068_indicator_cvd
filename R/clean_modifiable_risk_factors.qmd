@@ -1,0 +1,506 @@
+---
+title: "clean_data"
+format: html
+---
+
+```{r}
+# Set time zone
+Sys.setenv(TZ='Europe/London')
+
+# Download and attach standard packages
+if (!require(pacman)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(tidyverse, here, janitor, RMariaDB, DBI, glue, renv, dbplyr, lubridate, scales)
+
+i_am("R/clean_modifiable_risk_factors.qmd")
+```
+
+```{r}
+# Connect to CPRD database -------------------
+
+# Connect to the MySQL database: con
+con <- dbConnect(RMariaDB::MariaDB(), 
+                 dbname = "cprd2023", 
+                 host = "cprd-sea-2023.cisllnygqz7r.eu-west-2.rds.amazonaws.com", 
+                 port = 3306,
+                 user = "test",
+                 password = "password")
+```
+
+## Smoking
+
+## Obesity - classifications
+
+Any record of a finding of BMI being obese, 30 or greater or 40 or greater, with no subsequent record of a finding of BMI being healthy, overweight or underweight within three years of the end date; or the most recent BMI value recording within three years of the end date having a value of 30 or greater
+
+```{r}
+# Check cluster_ids for obesity
+
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category IN ('Obese', 'Not obese');")
+```
+
+
+```{r}
+cohort_def_var <- "obesity"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+```
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows, medcodeid 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("WITH t AS (
+    SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 5)
+    SELECT MAX(n_rows) FROM t;"))
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category IN ('Obese', 'Not obese');")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+dbGetQuery(con, glue("SELECT obstypeid, COUNT(*)
+           FROM p068_{cohort_def_var}_define
+           GROUP BY obstypeid
+           ORDER BY COUNT(*) DESC"))
+```
+
+```{r}
+obesity_df <- tbl(con, "p068_obesity_define")
+```
+
+```{r}
+obesity_df %>% 
+    count(category) %>% 
+    arrange(desc(n))
+```
+
+```{r}
+obesity_df %>% 
+    count(cluster_id) %>% 
+    arrange(desc(n))
+```
+
+```{r}
+obesity_df %>% 
+    filter(category != "Not obese", !(cluster_id %in% c('BMIUNDER_COD', 'BMIHEALTHY_COD', 'BMIOVER_COD'))) %>% 
+    count(medcodeid_desc) %>% 
+    arrange(desc(n))
+```
+
+```{r}
+# Obese records only
+# Get number of rows
+df_nrow <- obesity_df %>%
+    filter(category != "Not obese", 
+           !(cluster_id %in% c('BMIUNDER_COD', 'BMIHEALTHY_COD', 'BMIOVER_COD'))) %>% 
+    summarise(n = n()) %>% 
+    collect() %>% 
+    pull(n) %>% 
+    pluck(1)
+
+# Min, mean and max date
+obesity_df %>% 
+    filter(category != "Not obese", 
+           !(cluster_id %in% c('BMIUNDER_COD', 'BMIHEALTHY_COD', 'BMIOVER_COD'))) %>% 
+    collect() %>% 
+    summarise(min = min(obsdate, na.rm = T),
+              mean = mean(obsdate, na.rm = T),
+              max = max(obsdate, na.rm = T))
+
+# Count number of records before certain date
+obesity_df %>% 
+    filter(category != "Not obese", 
+           !(cluster_id %in% c('BMIUNDER_COD', 'BMIHEALTHY_COD', 'BMIOVER_COD'))) %>% 
+    collect() %>% 
+    summarise(n = n(),
+              n_na = sum(is.na(obsdate), na.rm = T),
+              pre_2013 = sum(obsdate < ymd("2013-04-01"), na.rm = T),
+              pre_2015 = sum(obsdate < ymd("2015-04-01"), na.rm = T),
+              pre_2018 = sum(obsdate < ymd("2018-04-01"), na.rm = T),
+              pre_2020 = sum(obsdate < ymd("2020-04-01"), na.rm = T),
+              post_2023 = sum(obsdate > ymd("2023-03-31"), na.rm = T)) %>% 
+    pivot_longer(cols = everything(), names_to = "var", values_to = "value") %>% 
+    mutate(prop = value/df_nrow)
+```
+
+
+```{r}
+# Distribution of obsdate
+obesity_df %>% 
+    filter(category != "Not obese", 
+           !(cluster_id %in% c('BMIUNDER_COD', 'BMIHEALTHY_COD', 'BMIOVER_COD')),
+           obsdate >= "2010-04-01",
+           obsdate < "2023-04-01") %>% 
+    collect() %>%
+    mutate(ym = ymd(paste0(year(obsdate), "-", month(obsdate), "-01"))) %>% 
+    group_by(ym) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = ym, y = n)) +
+    geom_bar(stat = "identity") +
+    scale_x_date(date_breaks="6 months", date_labels = "%b %Y", limits = c(ymd("2010-04-01", "2023-04-01"))) +
+    scale_y_continuous(labels = label_comma()) +
+    theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1))
+```
+
+
+```{r}
+#| eval: false
+
+# Rerun load data while filtering to exclude values for "Body mass index" (923861000006112) to another table
+# Load those records in with bmival_define
+
+# Keep latest record per person
+# Remove records from BMIUNDER_COD, BMIHEALTHY_COD, BMIOVER_COD, category == "Not obese"
+dbExecute(con, "DROP TABLE IF EXISTS p068_obese_classification;")
+
+dbExecute(con, "CREATE TABLE p068_obese_classification
+    SELECT *
+    FROM p068_obesity_define
+    WHERE category NOT IN ('Not obese')
+    AND cluster_id NOT IN ('BMIUNDER_COD', 'BMIHEALTHY_COD', 'BMIOVER_COD')
+    AND obsdate >= '2020-04-01';")
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_obese_classification;"))
+```
+
+## Obesity - BMI value
+
+```{r}
+# Check cluster_ids for obesity
+
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category IN ('BMI value');")
+```
+
+
+```{r}
+cohort_def_var <- "bmival"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+```
+
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("WITH t AS (
+    SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 5)
+    SELECT MAX(n_rows) FROM t;"))
+```
+
+
+
+```{r}
+# Examine obstypeid
+dbGetQuery(con, glue("SELECT obstypeid, COUNT(*)
+           FROM p068_{cohort_def_var}_define
+           GROUP BY obstypeid
+           ORDER BY COUNT(*) DESC"))
+```
+
+```{r}
+# Examine numunitid
+# Vast majority kg/m2
+# Join didn't happen properly, strangely
+dbGetQuery(con, glue("SELECT numunitid, COUNT(*)
+           FROM p068_{cohort_def_var}_define
+           GROUP BY obstypeid
+           ORDER BY COUNT(*) DESC"))
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category IN ('BMI value');")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+# Create a table from bmival table in mySQL
+bmival_df <- tbl(con, "p068_bmival_define")
+```
+
+```{r}
+# Examine distributions
+# Get number of rows
+df_nrow <- bmival_df %>%
+    summarise(n = n()) %>% 
+    collect() %>% 
+    pull(n) %>% 
+    pluck(1)
+
+
+# Summarise
+bmival_df %>% 
+    summarise(min = min(value, na.rm = T),
+              mean = mean(value, na.rm = T),
+              max = max(value, na.rm = T))
+
+bmival_df %>% 
+    summarise(n = n(),
+              n_na = sum(is.na(value), na.rm = T),
+              below_10 = sum(value < 10, na.rm = T),
+              above_70 = sum(value > 70, na.rm = T)) %>% 
+    pivot_longer(cols = everything(), names_to = "var", values_to = "value") %>% 
+    mutate(prop = value/df_nrow)
+```
+
+
+```{r}
+# Examine distributions for records between 0 and 70 only
+# Summarise
+bmival_df %>% 
+    filter(between(value, 10, 70)) %>% 
+    summarise(min = min(value, na.rm = T),
+              mean = mean(value, na.rm = T),
+              max = max(value, na.rm = T),
+              n = n(),
+              n_na = sum(is.na(value), na.rm = T))
+```
+
+```{r}
+# Examine records with extreme values
+small <- bmival_df %>% 
+    filter(value < 10) %>% 
+    collect()
+
+large <- bmival_df %>% 
+    filter(value > 70) %>% 
+    collect()
+
+nrow(small) + nrow(large)
+```
+
+```{r}
+
+# Distribution after removing extreme values
+bmival_df %>% 
+    filter(between(value, 0, 100)) %>% 
+    collect() %>% 
+    ggplot(aes(x = value)) +
+    geom_histogram(binwidth = 1) +
+    scale_x_continuous(breaks = seq(0,100,5)) +
+    scale_y_continuous(labels = label_comma())
+
+bmival_df %>% 
+    filter(between(value, 10, 70)) %>% 
+    collect() %>% 
+    ggplot(aes(x = value)) +
+    geom_histogram(binwidth = 1) +
+    scale_x_continuous(breaks = seq(0,100,5)) +
+    scale_y_continuous(labels = label_comma())
+```
+
+```{r}
+# Get number of rows
+df_nrow <- bmival_df %>%
+    filter(between(value, 10, 70)) %>% 
+    summarise(n = n()) %>% 
+    collect() %>% 
+    pull(n) %>% 
+    pluck(1)
+
+bmival_df %>% 
+    filter(between(value, 10, 70)) %>%
+    collect() %>% 
+    summarise(min = min(obsdate, na.rm = T),
+              mean = mean(obsdate, na.rm = T),
+              max = max(obsdate, na.rm = T))
+
+bmival_df %>% 
+    filter(between(value, 10, 70)) %>%
+    collect() %>% 
+    summarise(n = n(),
+              n_na = sum(is.na(obsdate), na.rm = T),
+              pre_2013 = sum(obsdate < ymd("2013-04-01"), na.rm = T),
+              pre_2015 = sum(obsdate < ymd("2015-04-01"), na.rm = T),
+              pre_2018 = sum(obsdate < ymd("2018-04-01"), na.rm = T),
+              pre_2020 = sum(obsdate < ymd("2020-04-01"), na.rm = T),
+              post_2023 = sum(obsdate > ymd("2023-03-31"), na.rm = T)) %>% 
+    pivot_longer(cols = everything(), names_to = "var", values_to = "value") %>% 
+    mutate(prop = value/df_nrow)
+```
+
+```{r}
+bmival_df %>% 
+    filter(between(value, 10, 70),
+           obsdate >= "2010-04-01",
+           obsdate < "2023-04-01") %>% 
+    collect() %>%
+    mutate(ym = ymd(paste0(year(obsdate), "-", month(obsdate), "-01"))) %>% 
+    group_by(ym) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = ym, y = n)) +
+    geom_bar(stat = "identity") +
+    scale_x_date(date_breaks="6 months", date_labels = "%b %Y", limits = c(ymd("2010-04-01", "2023-04-01"))) +
+    scale_y_continuous(labels = label_comma()) +
+    theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1)) 
+```
+
+
+```{r}
+#| eval: false
+
+# Remove records with NA in value
+# Drop extreme values - less than 10 and more than 70
+# Keep only BMI value records from 2020-04-01 (within three years of end date)
+# Categorise BMI
+
+dbExecute(con, "DROP TABLE IF EXISTS p068_bmival_clean;")
+
+bmi_cat_query <- "CREATE TABLE p068_bmival_clean
+    WITH t AS (
+        SELECT *
+        FROM p068_bmival_define
+        WHERE value BETWEEN 10 AND 70
+        AND obsdate >= '2020-04-01'
+        )
+        SELECT *,
+            CASE 
+                WHEN value < 18.5 THEN 'below 18.5 - Underweight'
+                WHEN value >= 18.5 AND value < 25 THEN '18.5 to 24.9 - Healthy weight'
+                WHEN value >= 25 AND value < 30 THEN '25 to 29.9 - Overweight'
+                WHEN value >= 30 AND value < 40 THEN '30 to 39.9 - Obese'
+                WHEN value >= 40 THEN '40 or above - Severely obese'
+            END AS bmi_category
+        FROM t
+    ;"
+
+dbExecute(con, bmi_cat_query)
+```
+```{r}
+# Check
+tbl(con, "p068_bmival_clean") %>% 
+    summarise(n = n(),
+              min = min(value, na.rm = T),
+              mean = mean(value, na.rm = T),
+              max = max(value, na.rm = T),
+              n_na = sum(is.na(value), na.rm = T),
+              min_date = min(obsdate, na.rm = T),
+              mean_date = mean(obsdate, na.rm = T),
+              max_date = max(obsdate, na.rm = T),
+              n_na_date = sum(is.na(obsdate), na.rm = T))
+
+tbl(con, "p068_bmival_clean") %>% 
+    group_by(bmi_category) %>% 
+    summarise(n = n(),
+              min = min(value, na.rm = T),
+              mean = mean(value, na.rm = T),
+              max = max(value, na.rm = T))
+```
+
+
+
+```{r}
+# Create separate table for obese people only, combining bmival and obesity tables
+dbExecute(con, "DROP TABLE IF EXISTS p068_obesity_mod_factor;")
+
+obesity_combine_query <- "CREATE TABLE p068_obesity_mod_factor
+        WITH v AS ( -- Keep records with BMI value above 30 only
+            SELECT *
+            FROM p068_bmival_clean
+            WHERE bmi_category IN ('30 to 39.9 - Obese', '40 or above - Severely obese')
+        ),
+        u AS ( -- Union obese records from classification and BMI value
+            SELECT *, NULL AS bmi_category FROM p068_obese_classification
+            UNION
+            SELECT * FROM v),
+        r AS ( -- Calculate row numbers per patient to keep latest record
+            SELECT *,
+            ROW_NUMBER() OVER (PARTITION BY patid ORDER BY obsdate DESC) AS rn
+            FROM u
+        )
+        -- Keep latest record per patient
+        SELECT
+            patid,
+            pracid,
+            obsid,
+            obsdate,
+            medcodeid,
+            medcodeid_desc,
+            value,
+            numunitid,
+            obstypeid,
+            include,
+            category,
+            cluster_id,
+            bmi_category
+        FROM r
+        WHERE rn = 1;
+    "
+
+dbExecute(con, obesity_combine_query)
+```
+
+```{r}
+# Count number of overlap
+dbGetQuery(con, "SELECT COUNT(DISTINCT b.patid)
+    FROM (SELECT *
+            FROM p068_bmival_clean
+            WHERE bmi_category IN ('30 to 39.9 - Obese', '40 or above -     Severely obese')) AS b 
+    INNER JOIN p068_obese_classification AS o ON b.patid = o.patid;")
+```
+
+
+```{r}
+# Check
+tbl(con, "p068_obesity_mod_factor") %>% 
+    count(medcodeid_desc) %>% 
+    arrange(desc(n))
+
+# Some of the classification codes must have a BMI value associated, therefore max value is not 70 but 108
+tbl(con, "p068_obesity_mod_factor") %>% 
+    summarise(n = n(),
+              n_patid = n_distinct(patid),
+              min = min(value, na.rm = T),
+              mean = mean(value, na.rm = T),
+              max = max(value, na.rm = T),
+              n_na = sum(is.na(value), na.rm = T),
+              min_date = min(obsdate, na.rm = T),
+              mean_date = mean(obsdate, na.rm = T),
+              max_date = max(obsdate, na.rm = T),
+              n_na_date = sum(is.na(obsdate), na.rm = T))
+```
+
+
+```{r}
+# Disconnect database
+dbDisconnect(con)
+```
