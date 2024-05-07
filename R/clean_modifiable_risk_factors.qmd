@@ -31,9 +31,222 @@ con <- dbConnect(RMariaDB::MariaDB(),
 
 ## Smoking
 
+Current smoker – the most recent smoking habit record within three years of the end date (i.e. from 1st April 2020 to end date) is a current smoking code
+
+### Examine
+
+```{r}
+# Check cluster_ids for obesity
+
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category IN ('Smoking status', 'Current smoker');")
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category IN ('Smoking status', 'Current smoker');")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+# Are all LSMOK codes in SMOK?
+codes$medcodeid[codes$cluster_id == "LSMOK_COD"] %in% codes$medcodeid[codes$cluster_id == "SMOK_COD"]
+
+# Drop SMOK_COD codes that are also in LSMOK_COD
+dbExecute(con, "WITH t AS (
+        SELECT medcodeid FROM p068_codes WHERE cluster_id = 'LSMOK_COD'
+    )
+    DELETE FROM p068_codes
+    WHERE cluster_id = 'SMOK_COD'
+    AND medcodeid IN (SELECT medcodeid FROM t);
+    ")
+```
+
+```{r}
+cohort_def_var <- "smoking"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+```
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows, medcodeid 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 10;"))
+```
+
+```{r}
+dbGetQuery(con, glue("SELECT obstypeid, COUNT(*)
+           FROM p068_{cohort_def_var}_define
+           GROUP BY obstypeid
+           ORDER BY COUNT(*) DESC"))
+```
+
+```{r}
+smoking_df <- tbl(con, "p068_smoking_define")
+```
+
+```{r}
+smoking_df %>% 
+    count(category) %>% 
+    arrange(desc(n))
+```
+
+```{r}
+smoking_df %>% 
+    count(cluster_id) %>% 
+    arrange(desc(n))
+```
+
+```{r}
+# Which codes are used the most in each cluster? (additional, LSMOK, SMOK)
+smoking_codes_examine <- smoking_df %>% 
+    group_by(cluster_id) %>% 
+    count(medcodeid_desc) %>% 
+    arrange(cluster_id, desc(n)) %>% 
+    collect()
+```
+
+```{r}
+# Investigate status records
+smoking_status <- smoking_df %>% 
+    filter(include == "Status") %>% 
+    collect() %>% 
+    arrange(medcodeid)
+```
+
+
+```{r}
+# Look at status records
+smoking_status %>% 
+    count(medcodeid_desc, medcodeid) %>% 
+    arrange(desc(n))
+
+smoking_status %>% 
+    count(numunitid) %>% 
+    arrange(desc(n))
+```
+```{r}
+tmp <- smoking_status %>% 
+    filter(medcodeid == "342574011")
+```
+
+```{r}
+# Investigate additional smoking codes that aren't smoking status records
+smoking_additional <- smoking_df %>% 
+    filter(include != "Status", cluster_id == "additional") %>% 
+    collect()
+```
+
+```{r}
+tmp <- smoking_additional %>%
+    group_by(include) %>% 
+    count(medcodeid_desc, medcodeid) %>% 
+    arrange(include, desc(n))
+```
+
+### Execute
+
+```{r}
+#| eval: false
+
+# Drop all records with additional codes for smoking status and intervention - not helpful
+# Drop records before 1st Jan 1995
+# Keep most recent record
+# Drop records that are in SMOK_COD
+
+dbExecute(con, "DROP TABLE IF EXISTS p068_smoker_mod_factor;")
+
+smoker_query <- "CREATE TABLE p068_smoker_mod_factor
+        WITH a AS ( -- Drop all records with include as smoking status or intervention, and before 1st Jan 1995
+            SELECT *
+            FROM p068_smoking_define
+            WHERE include NOT IN ('Status', 'intervention')
+            AND obsdate >= '1995-01-01'
+        ),
+        r AS ( -- Calculate row numbers per patient to keep latest record
+            SELECT *,
+            ROW_NUMBER() OVER (PARTITION BY patid ORDER BY obsdate DESC) AS rn
+            FROM a
+        )
+        -- Keep latest record per patient
+        -- Drop all records that are SMOK_COD (excluding SMOK_COD codes that are in LSMOK_COD)
+        SELECT
+            patid,
+            pracid,
+            obsid,
+            obsdate,
+            medcodeid,
+            medcodeid_desc,
+            value,
+            numunitid,
+            obstypeid,
+            include,
+            category,
+            cluster_id
+        FROM r
+        WHERE rn = 1
+        AND cluster_id NOT IN ('SMOK_COD');
+    "
+
+dbExecute(con, smoker_query)
+```
+
+### Examine post-execution
+
+```{r}
+# Check
+tbl(con, "p068_smoker_mod_factor") %>% 
+    count(medcodeid_desc, medcodeid) %>% 
+    arrange(desc(n))
+
+tbl(con, "p068_smoker_mod_factor") %>% 
+    collect() %>% 
+    summarise(n = n(),
+              n_patid = n_distinct(patid),
+              min_date = min(obsdate, na.rm = T),
+              q1_date = quantile(obsdate, probs = 0.25, type = 1, na.rm = T),
+              mean_date = mean(obsdate, na.rm = T),
+              median_date = quantile(obsdate, probs = 0.5, type = 1, na.rm = T),
+              q3_date = quantile(obsdate, probs = 0.75, type = 1, na.rm = T),
+              max_date = max(obsdate, na.rm = T),
+              n_na_date = sum(is.na(obsdate), na.rm = T))
+
+```
+
+```{r}
+# Distribution of obsdate
+tbl(con, "p068_smoker_mod_factor") %>%
+    collect() %>%
+    mutate(ym = ymd(paste0(year(obsdate), "-", month(obsdate), "-01"))) %>% 
+    group_by(ym) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = ym, y = n)) +
+    geom_bar(stat = "identity") +
+    scale_x_date(date_breaks="1 year", date_labels = "%b %Y", limits = c(ymd("1995-01-01", "2023-04-01"))) +
+    scale_y_continuous(labels = label_comma()) +
+    theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1)) 
+```
+
 ## Obesity - classifications
 
 Any record of a finding of BMI being obese, 30 or greater or 40 or greater, with no subsequent record of a finding of BMI being healthy, overweight or underweight within three years of the end date; or the most recent BMI value recording within three years of the end date having a value of 30 or greater
+
+### Examine
 
 ```{r}
 # Check cluster_ids for obesity
@@ -125,7 +338,10 @@ obesity_df %>%
            !(cluster_id %in% c('BMIUNDER_COD', 'BMIHEALTHY_COD', 'BMIOVER_COD'))) %>% 
     collect() %>% 
     summarise(min = min(obsdate, na.rm = T),
+              q1 = quantile(obsdate, probs = 0.25, type = 1, na.rm = T),
               mean = mean(obsdate, na.rm = T),
+              median = quantile(obsdate, probs = 0.5, type = 1, na.rm = T),
+              q3 = quantile(obsdate, probs = 0.75, type = 1, na.rm = T),
               max = max(obsdate, na.rm = T))
 
 # Count number of records before certain date
@@ -135,6 +351,7 @@ obesity_df %>%
     collect() %>% 
     summarise(n = n(),
               n_na = sum(is.na(obsdate), na.rm = T),
+              pre_1995 = sum(obsdate < ymd("1995-01-01"), na.rm = T),
               pre_2013 = sum(obsdate < ymd("2013-04-01"), na.rm = T),
               pre_2015 = sum(obsdate < ymd("2015-04-01"), na.rm = T),
               pre_2018 = sum(obsdate < ymd("2018-04-01"), na.rm = T),
@@ -150,7 +367,7 @@ obesity_df %>%
 obesity_df %>% 
     filter(category != "Not obese", 
            !(cluster_id %in% c('BMIUNDER_COD', 'BMIHEALTHY_COD', 'BMIOVER_COD')),
-           obsdate >= "2010-04-01",
+           obsdate >= "1995-01-01",
            obsdate < "2023-04-01") %>% 
     collect() %>%
     mutate(ym = ymd(paste0(year(obsdate), "-", month(obsdate), "-01"))) %>% 
@@ -158,11 +375,12 @@ obesity_df %>%
     summarise(n = n()) %>% 
     ggplot(aes(x = ym, y = n)) +
     geom_bar(stat = "identity") +
-    scale_x_date(date_breaks="6 months", date_labels = "%b %Y", limits = c(ymd("2010-04-01", "2023-04-01"))) +
+    scale_x_date(date_breaks="1 year", date_labels = "%b %Y", limits = c(ymd("1995-01-01", "2023-04-01"))) +
     scale_y_continuous(labels = label_comma()) +
     theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1))
 ```
 
+### Execute
 
 ```{r}
 #| eval: false
@@ -179,13 +397,28 @@ dbExecute(con, "CREATE TABLE p068_obese_classification
     FROM p068_obesity_define
     WHERE category NOT IN ('Not obese')
     AND cluster_id NOT IN ('BMIUNDER_COD', 'BMIHEALTHY_COD', 'BMIOVER_COD')
-    AND obsdate >= '2020-04-01';")
+    AND obsdate >= '1995-01-01';")
+```
 
+
+```{r}
 # Print final number of distinct patients
 dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_obese_classification;"))
+
+# Check date distribution
+tbl(con, "p068_obese_classification") %>% 
+    collect() %>% 
+    summarise(min = min(obsdate, na.rm = T),
+              q1 = quantile(obsdate, probs = 0.25, type = 1, na.rm = T),
+              mean = mean(obsdate, na.rm = T),
+              median = quantile(obsdate, probs = 0.5, type = 1, na.rm = T),
+              q3 = quantile(obsdate, probs = 0.75, type = 1, na.rm = T),
+              max = max(obsdate, na.rm = T))
 ```
 
 ## Obesity - BMI value
+
+### Examine
 
 ```{r}
 # Check cluster_ids for obesity
@@ -341,7 +574,10 @@ bmival_df %>%
     filter(between(value, 10, 70)) %>%
     collect() %>% 
     summarise(min = min(obsdate, na.rm = T),
+              q1 = quantile(obsdate, probs = 0.25, type = 1, na.rm = T),
               mean = mean(obsdate, na.rm = T),
+              median = quantile(obsdate, probs = 0.5, type = 1, na.rm = T),
+              q3 = quantile(obsdate, probs = 0.75, type = 1, na.rm = T),
               max = max(obsdate, na.rm = T))
 
 bmival_df %>% 
@@ -349,6 +585,7 @@ bmival_df %>%
     collect() %>% 
     summarise(n = n(),
               n_na = sum(is.na(obsdate), na.rm = T),
+              pre_1995 = sum(obsdate < ymd("1995-01-01"), na.rm = T),
               pre_2013 = sum(obsdate < ymd("2013-04-01"), na.rm = T),
               pre_2015 = sum(obsdate < ymd("2015-04-01"), na.rm = T),
               pre_2018 = sum(obsdate < ymd("2018-04-01"), na.rm = T),
@@ -361,19 +598,19 @@ bmival_df %>%
 ```{r}
 bmival_df %>% 
     filter(between(value, 10, 70),
-           obsdate >= "2010-04-01",
-           obsdate < "2023-04-01") %>% 
+           obsdate >= "1995-01-01") %>% 
     collect() %>%
     mutate(ym = ymd(paste0(year(obsdate), "-", month(obsdate), "-01"))) %>% 
     group_by(ym) %>% 
     summarise(n = n()) %>% 
     ggplot(aes(x = ym, y = n)) +
     geom_bar(stat = "identity") +
-    scale_x_date(date_breaks="6 months", date_labels = "%b %Y", limits = c(ymd("2010-04-01", "2023-04-01"))) +
+    scale_x_date(date_breaks="1 year", date_labels = "%b %Y", limits = c(ymd("1995-01-01", "2023-04-01"))) +
     scale_y_continuous(labels = label_comma()) +
     theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1)) 
 ```
 
+### Execute
 
 ```{r}
 #| eval: false
@@ -390,7 +627,7 @@ bmi_cat_query <- "CREATE TABLE p068_bmival_clean
         SELECT *
         FROM p068_bmival_define
         WHERE value BETWEEN 10 AND 70
-        AND obsdate >= '2020-04-01'
+        AND obsdate >= '1995-01-01'
         )
         SELECT *,
             CASE 
