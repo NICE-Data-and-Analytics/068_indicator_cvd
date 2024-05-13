@@ -142,7 +142,7 @@ cvdriskass_df %>%
 
 # Mostly % so no need to adjust threshold now
 ```
-
+### Execute
 
 ```{r}
 # Create cvdriskass exclusion table
@@ -266,6 +266,8 @@ cvd_df %>%
     count(category) %>% 
     arrange(desc(n))
 ```
+
+### Execute
 
 ```{r}
 # Rename this table as exclusion

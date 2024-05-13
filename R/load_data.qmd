@@ -195,7 +195,7 @@ load_data <- function(con, project_id, n, filename, cohort_def_var, end_date, mo
 #| eval: false
 
 # Load codelist
-codelist_file <- "CVDRISKASS_COD_cprd_plus.txt"
+codelist_file <- "nhs_health_check_cprd_plus.txt"
 
 # Load codelist into p068_codes dictionary
 load_dict_query <- glue("LOAD DATA LOCAL INFILE '{here('codes', codelist_file)}'
@@ -219,9 +219,9 @@ load_dict_query <- glue("LOAD DATA LOCAL INFILE '{here('codes', codelist_file)}'
 dbExecute(con, load_dict_query)
 
 # Check if loaded properly
-dbGetQuery(con, "SELECT DISTINCT category FROM p068_codes;")
+dbGetQuery(con, "SELECT category, COUNT(*) FROM p068_codes GROUP BY category;")
 
-dbGetQuery(con, "SELECT DISTINCT cluster_id FROM p068_codes;")
+dbGetQuery(con, "SELECT cluster_id, COUNT(*) FROM p068_codes GROUP BY category;")
 ```
 
 ```{r}
@@ -230,17 +230,20 @@ dbGetQuery(con, "SELECT DISTINCT cluster_id FROM p068_codes;")
 # Set parameters
 project_id <- "p068"
 end_date <- "2023-03-31"
-cohort_def_var <- "cvdriskass"
-filename <- "cvdriskass_Define_Inc1_Observation"
+cohort_def_var <- "nhs_health_check"
+filename <- "nhs_health_check_Define_Inc1_Observation"
 more_filters <- NA_character_
-latest_rec <- FALSE
+# more_filters <- "AND medcodeid IN ('923861000006112')"
+latest_rec <- TRUE
 # grouping_var <- paste0(", ", paste0(c("cluster_id"), collapse = ", "))
 grouping_var <- NA_character_
-categories <- paste0(paste0("'", c("CVD risk assessment"), "'"), collapse = ", ")
+categories <- paste0(paste0("'", c('NHS health check'), "'"), collapse = ", ")
 ```
 
 
 ```{r}
+#| eval: false
+
 # Create define table
 dbExecute(con, glue("CREATE TABLE p068_{cohort_def_var}_define (
             patid VARCHAR(19),
@@ -263,7 +266,7 @@ dbGetQuery(con, glue("DESCRIBE p068_{cohort_def_var}_define;"))
 
 ```{r}
 # Specify which files
-file_seq <- 3:9
+file_seq <- 1:2
 
 # Run function to read all data
 walk(file_seq, \(x) load_data(n = x, project_id = project_id, con = con, filename = filename, cohort_def_var = cohort_def_var, end_date = end_date, more_filters = more_filters, latest_rec = latest_rec, grouping_var = grouping_var, categories = categories))
@@ -287,10 +290,10 @@ dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_d
 # Debugging code
 
 # # Drop medcodeid dictionary rows
-# dbExecute(con, "DELETE FROM p068_codes WHERE category IN ('');")
-# 
-# dbExecute(con, "DROP TABLE IF EXISTS p068_cvdriskass_define;")
-# 
+# dbExecute(con, "DELETE FROM p068_codes WHERE category IN ('Erectile dysfunction');")
+
+# dbExecute(con, "DROP TABLE IF EXISTS p068_smi_define;")
+
 # load_data(n = 1, project_id = project_id, con = con, counter = counter, filename = filename, cohort_def_var = cohort_def_var, end_date = end_date, more_filters = more_filters, latest_rec = latest_rec, grouping_var = grouping_var, categories = categories)
 
 # dbGetQuery(con, glue("DESCRIBE latest;"))

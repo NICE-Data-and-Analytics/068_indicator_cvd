@@ -736,6 +736,245 @@ tbl(con, "p068_obesity_mod_factor") %>%
               n_na_date = sum(is.na(obsdate), na.rm = T))
 ```
 
+## Hypertension
+
+Any record of hypertension, with no subsequent record of hypertension resolved, on or before the end date.
+
+### Examine
+
+```{r}
+# Check cluster_ids
+
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category IN ('Hypertension', 'Hypertension resolved');")
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category IN ('Hypertension', 'Hypertension resolved');")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+cohort_def_var <- "hypertension"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+```
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows, medcodeid 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 10;"))
+```
+
+```{r}
+# Count obstype
+dbGetQuery(con, glue("SELECT obstypeid, COUNT(*)
+           FROM p068_{cohort_def_var}_define
+           GROUP BY obstypeid
+           ORDER BY COUNT(*) DESC"))
+```
+
+```{r}
+hypertension_df <- tbl(con, "p068_hypertension_define")
+```
+
+```{r}
+hypertension_df %>% 
+    count(category) %>% 
+    arrange(desc(n))
+```
+
+```{r}
+hypertension_df %>% 
+    count(cluster_id) %>% 
+    arrange(desc(n))
+```
+
+### Execute
+
+```{r}
+#| eval: false
+
+# Drop all records where the most recent record is hypertension resolved
+
+dbExecute(con, "DROP TABLE IF EXISTS p068_hypertension_mod_factor;")
+
+hypertension_query <- "CREATE TABLE p068_hypertension_mod_factor
+        SELECT *
+        FROM p068_hypertension_define
+        WHERE cluster_id NOT IN ('HYPRES_COD');
+    "
+
+dbExecute(con, hypertension_query)
+```
+
+### Examine post-execution
+
+```{r}
+# Check
+tbl(con, "p068_hypertension_mod_factor") %>% 
+    count(category) %>% 
+    arrange(desc(n))
+
+tbl(con, "p068_hypertension_mod_factor") %>% 
+    collect() %>% 
+    summarise(n = n(),
+              n_patid = n_distinct(patid),
+              min_date = min(obsdate, na.rm = T),
+              q1_date = quantile(obsdate, probs = 0.25, type = 1, na.rm = T),
+              mean_date = mean(obsdate, na.rm = T),
+              median_date = quantile(obsdate, probs = 0.5, type = 1, na.rm = T),
+              q3_date = quantile(obsdate, probs = 0.75, type = 1, na.rm = T),
+              max_date = max(obsdate, na.rm = T),
+              n_na_date = sum(is.na(obsdate), na.rm = T))
+
+```
+
+```{r}
+# Distribution of obsdate
+tbl(con, "p068_hypertension_mod_factor") %>%
+    collect() %>%
+    mutate(ym = ymd(paste0(year(obsdate), "-", month(obsdate), "-01"))) %>% 
+    group_by(ym) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = ym, y = n)) +
+    geom_bar(stat = "identity") +
+    scale_x_date(date_breaks="1 year", date_labels = "%b %Y", limits = c(ymd("1995-01-01", "2023-04-01"))) +
+    scale_y_continuous(labels = label_comma()) +
+    theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1)) 
+```
+
+## Hypercholesterolaemia
+
+Hypercholesterolaemia – any record of hypercholesterolaemia on or before the end date
+
+### Examine
+
+```{r}
+# Check cluster_ids
+
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category IN ('High cholesterol');")
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category IN ('High cholesterol');")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+cohort_def_var <- "high_cholesterol"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+```
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows, medcodeid 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 10;"))
+```
+
+```{r}
+dbGetQuery(con, glue("SELECT obstypeid, COUNT(*)
+           FROM p068_{cohort_def_var}_define
+           GROUP BY obstypeid
+           ORDER BY COUNT(*) DESC"))
+```
+
+```{r}
+high_chol_df <- tbl(con, "p068_high_cholesterol_define")
+```
+
+```{r}
+high_chol_df %>% 
+    count(category) %>% 
+    arrange(desc(n))
+```
+
+```{r}
+high_chol_df %>% 
+    count(cluster_id) %>% 
+    arrange(desc(n))
+```
+
+### Execute
+
+```{r}
+#| eval: false
+
+# Rename to mod_factor
+
+dbExecute(con, "DROP TABLE IF EXISTS p068_high_cholesterol_mod_factor;")
+
+dbExecute(con, "ALTER TABLE p068_high_cholesterol_define RENAME p068_high_cholesterol_mod_factor;")
+```
+
+### Examine post-execution
+
+```{r}
+# Check
+tbl(con, "p068_high_cholesterol_mod_factor") %>% 
+    collect() %>% 
+    summarise(n = n(),
+              n_patid = n_distinct(patid),
+              min_date = min(obsdate, na.rm = T),
+              q1_date = quantile(obsdate, probs = 0.25, type = 1, na.rm = T),
+              mean_date = mean(obsdate, na.rm = T),
+              median_date = quantile(obsdate, probs = 0.5, type = 1, na.rm = T),
+              q3_date = quantile(obsdate, probs = 0.75, type = 1, na.rm = T),
+              max_date = max(obsdate, na.rm = T),
+              n_na_date = sum(is.na(obsdate), na.rm = T))
+
+```
+
+```{r}
+# Distribution of obsdate
+tbl(con, "p068_high_cholesterol_mod_factor") %>%
+    collect() %>%
+    mutate(ym = ymd(paste0(year(obsdate), "-", month(obsdate), "-01"))) %>% 
+    group_by(ym) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = ym, y = n)) +
+    geom_bar(stat = "identity") +
+    scale_x_date(date_breaks="1 year", date_labels = "%b %Y", limits = c(ymd("1995-01-01", "2023-04-01"))) +
+    scale_y_continuous(labels = label_comma()) +
+    theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1)) 
+```
+
+
+## Disconnect
 
 ```{r}
 # Disconnect database

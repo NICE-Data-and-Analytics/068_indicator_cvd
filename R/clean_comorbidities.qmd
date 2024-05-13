@@ -1,0 +1,882 @@
+---
+title: "Clean comorbidities"
+format: html
+---
+
+```{r}
+# Set time zone
+Sys.setenv(TZ='Europe/London')
+
+# Download and attach standard packages
+if (!require(pacman)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(tidyverse, here, janitor, RMariaDB, DBI, glue, renv, dbplyr, lubridate, scales)
+
+i_am("R/clean_comorbidities.qmd")
+```
+
+```{r}
+# Connect to CPRD database -------------------
+
+# Connect to the MySQL database: con
+con <- dbConnect(RMariaDB::MariaDB(), 
+                 dbname = "cprd2023", 
+                 host = "cprd-sea-2023.cisllnygqz7r.eu-west-2.rds.amazonaws.com", 
+                 port = 3306,
+                 user = "test",
+                 password = "password")
+```
+
+## Type 2 diabetes
+
+Type 2 diabetes – any record of type 2 diabetes, with no subsequent diabetes resolved code, on or before the end date
+
+### Examine
+
+```{r}
+# Check cluster_ids
+
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category IN ('Type 2 diabetes', 'Diabetes resolved');")
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category IN ('Type 2 diabetes', 'Diabetes resolved');")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+cohort_def_var <- "t2dm"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+```
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows, medcodeid 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 10;"))
+```
+
+```{r}
+# Count obstype
+dbGetQuery(con, glue("SELECT obstypeid, COUNT(*)
+           FROM p068_{cohort_def_var}_define
+           GROUP BY obstypeid
+           ORDER BY COUNT(*) DESC"))
+```
+
+```{r}
+# Count category
+tbl(con, glue("p068_{cohort_def_var}_define")) %>% 
+    count(category) %>% 
+    arrange(desc(n))
+```
+
+```{r}
+# Count cluster_id
+tbl(con, glue("p068_{cohort_def_var}_define")) %>% 
+    count(cluster_id) %>% 
+    arrange(desc(n))
+```
+
+### Execute
+
+```{r}
+#| eval: false
+
+# Drop latest record if it is diabetes resolved
+
+dbExecute(con, "DROP TABLE IF EXISTS p068_t2dm_comorbidity;")
+
+dbExecute(con, "CREATE TABLE p068_t2dm_comorbidity
+    SELECT *
+    FROM p068_t2dm_define
+    WHERE cluster_id NOT IN ('DMRES_COD');")
+```
+
+### Examine post-execution
+
+```{r}
+# Check
+tbl(con, "p068_t2dm_comorbidity") %>% 
+    count(category) %>% 
+    arrange(desc(n))
+
+tbl(con, "p068_t2dm_comorbidity") %>% 
+    collect() %>% 
+    summarise(n = n(),
+              n_patid = n_distinct(patid),
+              min_date = min(obsdate, na.rm = T),
+              q1_date = quantile(obsdate, probs = 0.25, type = 1, na.rm = T),
+              mean_date = mean(obsdate, na.rm = T),
+              median_date = quantile(obsdate, probs = 0.5, type = 1, na.rm = T),
+              q3_date = quantile(obsdate, probs = 0.75, type = 1, na.rm = T),
+              max_date = max(obsdate, na.rm = T),
+              n_na_date = sum(is.na(obsdate), na.rm = T))
+
+```
+
+```{r}
+# Distribution of obsdate
+tbl(con, "p068_t2dm_comorbidity") %>%
+    collect() %>%
+    mutate(ym = ymd(paste0(year(obsdate), "-", month(obsdate), "-01"))) %>% 
+    group_by(ym) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = ym, y = n)) +
+    geom_bar(stat = "identity") +
+    scale_x_date(date_breaks="1 year", date_labels = "%b %Y", limits = c(ymd("1995-01-01", "2023-04-01"))) +
+    scale_y_continuous(labels = label_comma()) +
+    theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1)) 
+```
+
+## Erectile dysfunction
+
+Erectile dysfunction – any record of erectile dysfunction on or before the end date
+
+### Examine
+
+```{r}
+# Check cluster_ids
+
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category IN ('Erectile dysfunction');")
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category IN ('Erectile dysfunction');")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+cohort_def_var <- "erectile_dysfunction"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+```
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows, medcodeid 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 10;"))
+```
+
+```{r}
+# Count obstype
+dbGetQuery(con, glue("SELECT obstypeid, COUNT(*)
+           FROM p068_{cohort_def_var}_define
+           GROUP BY obstypeid
+           ORDER BY COUNT(*) DESC"))
+```
+
+### Execute
+
+```{r}
+#| eval: false
+
+# Rename to mod_factor
+
+dbExecute(con, "DROP TABLE IF EXISTS p068_erectile_dysfunction_comorbidity;")
+
+dbExecute(con, "ALTER TABLE p068_erectile_dysfunction_define RENAME p068_erectile_dysfunction_comorbidity;")
+```
+
+### Examine post-execution
+
+```{r}
+# Check
+tbl(con, "p068_erectile_dysfunction_comorbidity") %>% 
+    collect() %>% 
+    summarise(n = n(),
+              n_patid = n_distinct(patid),
+              min_date = min(obsdate, na.rm = T),
+              q1_date = quantile(obsdate, probs = 0.25, type = 1, na.rm = T),
+              mean_date = mean(obsdate, na.rm = T),
+              median_date = quantile(obsdate, probs = 0.5, type = 1, na.rm = T),
+              q3_date = quantile(obsdate, probs = 0.75, type = 1, na.rm = T),
+              max_date = max(obsdate, na.rm = T),
+              n_na_date = sum(is.na(obsdate), na.rm = T))
+
+```
+
+```{r}
+# Distribution of obsdate
+tbl(con, "p068_erectile_dysfunction_comorbidity") %>%
+    collect() %>%
+    mutate(ym = ymd(paste0(year(obsdate), "-", month(obsdate), "-01"))) %>% 
+    group_by(ym) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = ym, y = n)) +
+    geom_bar(stat = "identity") +
+    scale_x_date(date_breaks="1 year", date_labels = "%b %Y", limits = c(ymd("1995-01-01", "2023-04-01"))) +
+    scale_y_continuous(labels = label_comma()) +
+    theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1)) 
+```
+
+## Serious mental illness
+
+Serious mental illness – any record of psychosis, schizophrenia or bipolar affective disorder on or before the end date
+
+### Examine
+
+```{r}
+# Check cluster_ids
+
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category IN ('Serious mental illness');")
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category IN ('Serious mental illness');")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+cohort_def_var <- "smi"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+```
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows, medcodeid 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 10;"))
+```
+
+```{r}
+# Count obstype
+dbGetQuery(con, glue("SELECT obstypeid, COUNT(*)
+           FROM p068_{cohort_def_var}_define
+           GROUP BY obstypeid
+           ORDER BY COUNT(*) DESC"))
+```
+
+```{r}
+# Count cluster_id
+tbl(con, glue("p068_{cohort_def_var}_define")) %>% 
+    count(cluster_id) %>% 
+    arrange(desc(n))
+```
+
+### Execute
+
+```{r}
+#| eval: false
+
+# Rename to mod_factor
+
+dbExecute(con, "DROP TABLE IF EXISTS p068_smi_comorbidity;")
+
+dbExecute(con, "ALTER TABLE p068_smi_define RENAME p068_smi_comorbidity;")
+```
+
+### Examine post-execution
+
+```{r}
+# Check
+tbl(con, "p068_smi_comorbidity") %>% 
+    count(category) %>% 
+    arrange(desc(n))
+
+tbl(con, "p068_smi_comorbidity") %>% 
+    collect() %>% 
+    summarise(n = n(),
+              n_patid = n_distinct(patid),
+              min_date = min(obsdate, na.rm = T),
+              q1_date = quantile(obsdate, probs = 0.25, type = 1, na.rm = T),
+              mean_date = mean(obsdate, na.rm = T),
+              median_date = quantile(obsdate, probs = 0.5, type = 1, na.rm = T),
+              q3_date = quantile(obsdate, probs = 0.75, type = 1, na.rm = T),
+              max_date = max(obsdate, na.rm = T),
+              n_na_date = sum(is.na(obsdate), na.rm = T))
+
+```
+
+```{r}
+# Distribution of obsdate
+tbl(con, "p068_smi_comorbidity") %>%
+    collect() %>%
+    mutate(ym = ymd(paste0(year(obsdate), "-", month(obsdate), "-01"))) %>% 
+    group_by(ym) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = ym, y = n)) +
+    geom_bar(stat = "identity") +
+    scale_x_date(date_breaks="1 year", date_labels = "%b %Y", limits = c(ymd("1995-01-01", "2023-04-01"))) +
+    scale_y_continuous(labels = label_comma()) +
+    theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1)) 
+```
+
+
+## Rheumatoid arthritis
+
+Rheumatoid arthritis – any record of rheumatoid arthritis on or before the end date
+
+### Examine
+
+```{r}
+# Check cluster_ids
+
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category IN ('Rheumatoid arthritis');")
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category IN ('Rheumatoid arthritis');")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+cohort_def_var <- "rarth"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+```
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows, medcodeid 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 10;"))
+```
+
+```{r}
+# Count obstype
+dbGetQuery(con, glue("SELECT obstypeid, COUNT(*)
+           FROM p068_{cohort_def_var}_define
+           GROUP BY obstypeid
+           ORDER BY COUNT(*) DESC"))
+```
+
+```{r}
+# Count cluster_id
+tbl(con, glue("p068_{cohort_def_var}_define")) %>% 
+    count(cluster_id) %>% 
+    arrange(desc(n))
+```
+
+### Execute
+
+```{r}
+#| eval: false
+
+# Rename to mod_factor
+
+dbExecute(con, "DROP TABLE IF EXISTS p068_rarth_comorbidity;")
+
+dbExecute(con, "ALTER TABLE p068_rarth_define RENAME p068_rarth_comorbidity;")
+```
+
+### Examine post-execution
+
+```{r}
+# Check
+tbl(con, "p068_rarth_comorbidity") %>% 
+    count(category) %>% 
+    arrange(desc(n))
+
+tbl(con, "p068_rarth_comorbidity") %>% 
+    collect() %>% 
+    summarise(n = n(),
+              n_patid = n_distinct(patid),
+              min_date = min(obsdate, na.rm = T),
+              q1_date = quantile(obsdate, probs = 0.25, type = 1, na.rm = T),
+              mean_date = mean(obsdate, na.rm = T),
+              median_date = quantile(obsdate, probs = 0.5, type = 1, na.rm = T),
+              q3_date = quantile(obsdate, probs = 0.75, type = 1, na.rm = T),
+              max_date = max(obsdate, na.rm = T),
+              n_na_date = sum(is.na(obsdate), na.rm = T))
+
+```
+
+```{r}
+# Distribution of obsdate
+tbl(con, "p068_rarth_comorbidity") %>%
+    collect() %>%
+    mutate(ym = ymd(paste0(year(obsdate), "-", month(obsdate), "-01"))) %>% 
+    group_by(ym) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = ym, y = n)) +
+    geom_bar(stat = "identity") +
+    scale_x_date(date_breaks="1 year", date_labels = "%b %Y", limits = c(ymd("1995-01-01", "2023-04-01"))) +
+    scale_y_continuous(labels = label_comma()) +
+    theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1)) 
+```
+
+## Systemic lupus erythematosus
+
+Systemic lupus erythematosus – any record of systemic lupus erythematosus on or before the end date
+
+### Examine
+
+```{r}
+# Check cluster_ids
+
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category IN ('SLE');")
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category IN ('SLE');")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+cohort_def_var <- "sle"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+```
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows, medcodeid 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 10;"))
+```
+
+```{r}
+# Count obstype
+dbGetQuery(con, glue("SELECT obstypeid, COUNT(*)
+           FROM p068_{cohort_def_var}_define
+           GROUP BY obstypeid
+           ORDER BY COUNT(*) DESC"))
+```
+
+```{r}
+# Count cluster_id
+tbl(con, glue("p068_{cohort_def_var}_define")) %>% 
+    count(cluster_id) %>% 
+    arrange(desc(n))
+```
+
+### Execute
+
+```{r}
+#| eval: false
+
+# Rename to comorbidity
+
+dbExecute(con, "DROP TABLE IF EXISTS p068_sle_comorbidity;")
+
+dbExecute(con, "ALTER TABLE p068_sle_define RENAME p068_sle_comorbidity;")
+```
+
+### Examine post-execution
+
+```{r}
+# Check
+tbl(con, "p068_sle_comorbidity") %>% 
+    count(category) %>% 
+    arrange(desc(n))
+
+tbl(con, "p068_sle_comorbidity") %>% 
+    collect() %>% 
+    summarise(n = n(),
+              n_patid = n_distinct(patid),
+              min_date = min(obsdate, na.rm = T),
+              q1_date = quantile(obsdate, probs = 0.25, type = 1, na.rm = T),
+              mean_date = mean(obsdate, na.rm = T),
+              median_date = quantile(obsdate, probs = 0.5, type = 1, na.rm = T),
+              q3_date = quantile(obsdate, probs = 0.75, type = 1, na.rm = T),
+              max_date = max(obsdate, na.rm = T),
+              n_na_date = sum(is.na(obsdate), na.rm = T))
+
+```
+
+```{r}
+# Distribution of obsdate
+tbl(con, "p068_sle_comorbidity") %>%
+    collect() %>%
+    mutate(ym = ymd(paste0(year(obsdate), "-", month(obsdate), "-01"))) %>% 
+    group_by(ym) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = ym, y = n)) +
+    geom_bar(stat = "identity") +
+    scale_x_date(date_breaks="1 year", date_labels = "%b %Y", limits = c(ymd("1995-01-01", "2023-04-01"))) +
+    scale_y_continuous(labels = label_comma()) +
+    theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1)) 
+```
+
+## Atrial fibrillation
+
+Atrial fibrillation – any record of atrial fibrillation, with no subsequent record of atrial fibrillation resolved, on or before the end date
+
+### Examine
+
+```{r}
+# Check cluster_ids
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category IN ('Atrial fibrillation', 'Atrial fibrillation resolved');")
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category IN ('Atrial fibrillation', 'Atrial fibrillation resolved');")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+cohort_def_var <- "afib"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+```
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows, medcodeid 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 10;"))
+```
+
+```{r}
+# Count obstype
+dbGetQuery(con, glue("SELECT obstypeid, COUNT(*)
+           FROM p068_{cohort_def_var}_define
+           GROUP BY obstypeid
+           ORDER BY COUNT(*) DESC"))
+```
+
+```{r}
+# Count category
+tbl(con, glue("p068_{cohort_def_var}_define")) %>% 
+    count(category) %>% 
+    arrange(desc(n))
+```
+
+```{r}
+# Count cluster_id
+tbl(con, glue("p068_{cohort_def_var}_define")) %>% 
+    count(cluster_id) %>% 
+    arrange(desc(n))
+```
+
+### Execute
+
+```{r}
+#| eval: false
+
+# Drop latest record if it is diabetes resolved
+
+dbExecute(con, "DROP TABLE IF EXISTS p068_afib_comorbidity;")
+
+dbExecute(con, "CREATE TABLE p068_afib_comorbidity
+    SELECT *
+    FROM p068_afib_define
+    WHERE cluster_id NOT IN ('AFIBRES_COD');")
+```
+
+### Examine post-execution
+
+```{r}
+# Check
+tbl(con, "p068_afib_comorbidity") %>% 
+    count(category) %>% 
+    arrange(desc(n))
+
+tbl(con, "p068_afib_comorbidity") %>% 
+    collect() %>% 
+    summarise(n = n(),
+              n_patid = n_distinct(patid),
+              min_date = min(obsdate, na.rm = T),
+              q1_date = quantile(obsdate, probs = 0.25, type = 1, na.rm = T),
+              mean_date = mean(obsdate, na.rm = T),
+              median_date = quantile(obsdate, probs = 0.5, type = 1, na.rm = T),
+              q3_date = quantile(obsdate, probs = 0.75, type = 1, na.rm = T),
+              max_date = max(obsdate, na.rm = T),
+              n_na_date = sum(is.na(obsdate), na.rm = T))
+
+```
+
+```{r}
+# Distribution of obsdate
+tbl(con, "p068_afib_comorbidity") %>%
+    collect() %>%
+    mutate(ym = ymd(paste0(year(obsdate), "-", month(obsdate), "-01"))) %>% 
+    group_by(ym) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = ym, y = n)) +
+    geom_bar(stat = "identity") +
+    scale_x_date(date_breaks="1 year", date_labels = "%b %Y", limits = c(ymd("1995-01-01", "2023-04-01"))) +
+    scale_y_continuous(labels = label_comma()) +
+    theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1)) 
+```
+
+## NHS health check
+
+For a variation of IND2023-164, to look at the receipt of both a CVD risk assessment and an NHS Health Check, the numerator is any person in the denominator with a record of a CVD risk assessment and an NHS Health Check between 1st April 2018 and 31st March 2023.
+
+### Examine
+
+```{r}
+# Check cluster_ids
+
+dbGetQuery(con, "SELECT DISTINCT(cluster_id) FROM p068_codes WHERE category IN ('NHS health check');")
+```
+
+```{r}
+# Examine codes
+codes <- dbGetQuery(con, "SELECT * FROM p068_codes WHERE category IN ('NHS health check');")
+
+codes <- codes %>% 
+    arrange(cluster_id)
+```
+
+```{r}
+cohort_def_var <- "nhs_health_check"
+
+# Examine table
+
+# Print final number of distinct patients
+dbGetQuery(con, glue("SELECT COUNT(DISTINCT patid), COUNT(*) FROM p068_{cohort_def_var}_define;"))
+```
+
+```{r}
+# Count how often each medcode is used
+dbGetQuery(con, glue("SELECT medcodeid_desc, COUNT(*) AS n_rows, medcodeid 
+                     FROM p068_{cohort_def_var}_define 
+                     GROUP BY medcodeid_desc
+                     ORDER BY n_rows DESC;"))
+```
+
+```{r}
+# Find max number of rows per patient
+dbGetQuery(con, glue("SELECT patid, COUNT(*) AS n_rows
+    FROM p068_{cohort_def_var}_define
+    GROUP BY patid
+    ORDER BY n_rows DESC
+    LIMIT 10;"))
+```
+
+```{r}
+# Count obstype
+dbGetQuery(con, glue("SELECT obstypeid, COUNT(*)
+           FROM p068_{cohort_def_var}_define
+           GROUP BY obstypeid
+           ORDER BY COUNT(*) DESC"))
+```
+
+```{r}
+# Count cluster_id
+tbl(con, glue("p068_{cohort_def_var}_define")) %>% 
+    count(cluster_id) %>% 
+    arrange(desc(n))
+```
+
+### Execute
+
+```{r}
+#| eval: false
+
+# Rename to comorbidity
+
+dbExecute(con, "DROP TABLE IF EXISTS p068_nhs_health_check_2018_2023;")
+
+dbExecute(con, "CREATE TABLE p068_nhs_health_check_2018_2023
+    SELECT *
+    FROM p068_nhs_health_check_define
+    WHERE obsdate >= '2018-04-01'")
+```
+
+### Examine post-execution
+
+```{r}
+# Check
+tbl(con, "p068_nhs_health_check_2018_2023") %>% 
+    collect() %>% 
+    summarise(n = n(),
+              n_patid = n_distinct(patid),
+              min_date = min(obsdate, na.rm = T),
+              q1_date = quantile(obsdate, probs = 0.25, type = 1, na.rm = T),
+              mean_date = mean(obsdate, na.rm = T),
+              median_date = quantile(obsdate, probs = 0.5, type = 1, na.rm = T),
+              q3_date = quantile(obsdate, probs = 0.75, type = 1, na.rm = T),
+              max_date = max(obsdate, na.rm = T),
+              n_na_date = sum(is.na(obsdate), na.rm = T))
+
+```
+
+```{r}
+# Distribution of obsdate
+tbl(con, "p068_nhs_health_check_cohort") %>%
+    collect() %>%
+    mutate(ym = ymd(paste0(year(obsdate), "-", month(obsdate), "-01"))) %>% 
+    group_by(ym) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = ym, y = n)) +
+    geom_bar(stat = "identity") +
+    scale_x_date(date_breaks="1 year", date_labels = "%b %Y", limits = c(ymd("1995-01-01", "2023-04-01"))) +
+    scale_y_continuous(labels = label_comma()) +
+    theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1)) 
+```
+
+## CVD risk assessment
+
+For all three indicators, the numerator is any person in the denominator (see “Study population”) with a record of a CVD risk assessment:
+•	Between 1st April 2018 and 31st March 2023 for IND2023-164, or 
+•	Between 1st April 2020 and 31st March 2023 for IND2023-165 and IND2023-166.
+This is equivalent to the outcome of interest.
+
+### Execute
+
+```{r}
+#| eval: false
+
+# Rename to comorbidity
+
+dbExecute(con, "DROP TABLE IF EXISTS p068_cvdriskass_2018_2023_latest;")
+
+cvdriskass_latest_query <- "CREATE TABLE p068_cvdriskass_2018_2023_latest
+    WITH t AS (
+        SELECT *,
+            ROW_NUMBER() OVER (PARTITION BY patid ORDER BY obsdate DESC) AS rn
+        FROM p068_cvdriskass_define
+        WHERE obsdate >= '2018-04-01' AND obsdate <= '2023-03-31'
+    )
+    SELECT patid,
+        pracid,
+        obsid,
+        obsdate,
+        medcodeid,
+        medcodeid_desc,
+        value,
+        numunitid,
+        obstypeid,
+        include,
+        category,
+        cluster_id
+    FROM t
+    WHERE rn = 1;"
+
+dbExecute(con, cvdriskass_latest_query)
+```
+
+### Examine post-execution
+
+```{r}
+# Check
+tbl(con, "p068_cvdriskass_2018_2023_latest") %>% 
+    collect() %>% 
+    summarise(n = n(),
+              n_patid = n_distinct(patid),
+              min_date = min(obsdate, na.rm = T),
+              q1_date = quantile(obsdate, probs = 0.25, type = 1, na.rm = T),
+              mean_date = mean(obsdate, na.rm = T),
+              median_date = quantile(obsdate, probs = 0.5, type = 1, na.rm = T),
+              q3_date = quantile(obsdate, probs = 0.75, type = 1, na.rm = T),
+              max_date = max(obsdate, na.rm = T),
+              n_na_date = sum(is.na(obsdate), na.rm = T))
+
+```
+
+```{r}
+# Distribution of obsdate
+tbl(con, "p068_cvdriskass_2018_2023_latest") %>%
+    collect() %>%
+    mutate(ym = ymd(paste0(year(obsdate), "-", month(obsdate), "-01"))) %>% 
+    group_by(ym) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = ym, y = n)) +
+    geom_bar(stat = "identity") +
+    scale_x_date(date_breaks="1 year", date_labels = "%b %Y", limits = c(ymd("2017-01-01", "2023-04-01"))) +
+    scale_y_continuous(labels = label_comma()) +
+    theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1)) 
+```
+
+
+## Disconnect
+
+```{r}
+# Disconnect database
+dbDisconnect(con)
+```
