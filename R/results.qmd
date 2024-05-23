@@ -61,9 +61,14 @@ populate_results <- function(var_name, var_type, description, age_45_84) {
 all_reg <- dbGetQuery(con, "SELECT COUNT(DISTINCT patid) AS n_ppl
 	FROM acceptable_pats_2023_12
 	WHERE (regenddate IS NULL OR regenddate > '2023-03-31')
+    AND (cprd_ddate IS NULL OR cprd_ddate > '2023-03-31')
 	AND pracid NOT IN ( -- Not in absorbed practices
 		SELECT pracid
-		FROM absorbed_practices_2023_12);") %>% pull(n_ppl) %>% pluck(1) %>% as.numeric()
+		FROM absorbed_practices_2023_12)
+	AND pracid IN ( -- last collection date for practice after 
+		SELECT pracid
+		FROM aurum_practices_2023_12
+		WHERE lcd > '2023-03-31');") %>% pull(n_ppl) %>% pluck(1) %>% as.numeric()
 ```
 
 ### The number of people aged 43 to 84 years and 45 to 84 years
@@ -125,7 +130,7 @@ cvdriskass_exclusion_val_45_84 <- dbGetQuery(con, glue("SELECT COUNT(DISTINCT pa
 	WHERE patid IN (SELECT patid FROM p068_cohort_45_84)")) %>% pull(n_ppl) %>% pluck(1) %>% as.numeric()
 
 cvdriskass_exclusion <- tibble(variable = "cvdriskass",
-                  description = "The number with a 10-year CVD risk score of 10% or more prior to 1 April 2018",
+                  description = "The number with a 10-year CVD risk score of 20% or more prior to 1 April 2018",
                   value_aged_43_84 = cvdriskass_exclusion_val_43_84,
                   value_aged_45_84 = cvdriskass_exclusion_val_45_84)
 ```
@@ -175,6 +180,15 @@ join_factors_query <- "CREATE TABLE p068_cohort_43_84_joined
                     OR chol.medcodeid IS NOT NULL THEN 1
                 ELSE 0
             END AS mod_factor,
+            CASE
+                WHEN t2dm.medcodeid IS NOT NULL
+                    OR ed.medcodeid IS NOT NULL
+                    OR smi.medcodeid IS NOT NULL
+                    OR rarth.medcodeid IS NOT NULL
+                    OR sle.medcodeid IS NOT NULL
+                    OR afib.medcodeid IS NOT NULL THEN 1
+                ELSE 0
+            END AS comorbidity,
             CASE
                 WHEN smok.medcodeid IS NOT NULL
                     OR obes.medcodeid IS NOT NULL
@@ -237,6 +251,47 @@ any_mod_factor <- tibble(variable = "any_mod_factor",
                   value_aged_45_84 = NA_real_)
 ```
 
+### The number of people with no exclusions with a modifiable risk factor: current smoker, obesity, hypertension or hypercholesterolemia 
+
+```{r}
+any_mod_factor_no_exclusions_val_43_84 <- dbGetQuery(con, "SELECT COUNT(DISTINCT patid) AS n_ppl
+    FROM p068_cohort_43_84_joined
+    WHERE mod_factor = 1
+    AND exclusion = 0;") %>% pull(n_ppl) %>% pluck(1) %>% as.numeric()
+
+any_mod_factor_no_exclusions <- tibble(variable = "any_mod_factor_no_exclusions",
+                  description = "The number with no exclusions with any of the following modifiable risk factors: current smoker, obesity, hypertension or hypercholesterolemia",
+                  value_aged_43_84 = any_mod_factor_no_exclusions_val_43_84,
+                  value_aged_45_84 = NA_real_)
+```
+
+### The number of people with a comorbidity: type 2 diabetes, erectile dysfunction, serious mental illness, rheumatoid arthritis, systemic lupus erythematosus or atrial fibrillation
+
+```{r}
+any_comorbidity_val_43_84 <- dbGetQuery(con, "SELECT COUNT(DISTINCT patid) AS n_ppl
+    FROM p068_cohort_43_84_joined
+    WHERE comorbidity = 1;") %>% pull(n_ppl) %>% pluck(1) %>% as.numeric()
+
+any_comorbidity <- tibble(variable = "any_comorbidity",
+                  description = "The number with any of the following comorbidities: type 2 diabetes, erectile dysfunction, serious mental illness, rheumatoid arthritis, systemic lupus erythematosus or atrial fibrillation",
+                  value_aged_43_84 = any_comorbidity_val_43_84,
+                  value_aged_45_84 = NA_real_)
+```
+
+### The number of people with no exclusions with a comorbidity: type 2 diabetes, erectile dysfunction, serious mental illness, rheumatoid arthritis, systemic lupus erythematosus or atrial fibrillation
+
+```{r}
+any_comorbidity_no_exclusions_val_43_84 <- dbGetQuery(con, "SELECT COUNT(DISTINCT patid) AS n_ppl
+    FROM p068_cohort_43_84_joined
+    WHERE comorbidity = 1
+    AND exclusion = 0;") %>% pull(n_ppl) %>% pluck(1) %>% as.numeric()
+
+any_comorbidity_no_exclusions <- tibble(variable = "any_comorbidity_no_exclusions",
+                  description = "The number with no exclusions with any of the following comorbidities: type 2 diabetes, erectile dysfunction, serious mental illness, rheumatoid arthritis, systemic lupus erythematosus or atrial fibrillation",
+                  value_aged_43_84 = any_comorbidity_no_exclusions_val_43_84,
+                  value_aged_45_84 = NA_real_)
+```
+
 ### The number of people with a modifiable risk factor or comorbidity: current smoker, obesity, hypertension, hypercholesterolemia, type 2 diabetes, erectile dysfunction, serious mental illness, rheumatoid arthritis, systemic lupus erythematosus or atrial fibrillation.
 
 ```{r}
@@ -247,6 +302,20 @@ any_mod_factor_or_comorbidity_val_43_84 <- dbGetQuery(con, "SELECT COUNT(DISTINC
 any_mod_factor_or_comorbidity <- tibble(variable = "any_mod_factor_or_comorbidity",
                   description = "The number with any of the following modifiable risk factors or comorbidities: current smoker, obesity, hypertension, hypercholesterolemia, type 2 diabetes, erectile dysfunction, serious mental illness, rheumatoid arthritis, systemic lupus erythematosus or atrial fibrillation",
                   value_aged_43_84 = any_mod_factor_or_comorbidity_val_43_84,
+                  value_aged_45_84 = NA_real_)
+```
+
+### The number of people with no exclusions with a modifiable risk factor or comorbidity: current smoker, obesity, hypertension, hypercholesterolemia, type 2 diabetes, erectile dysfunction, serious mental illness, rheumatoid arthritis, systemic lupus erythematosus or atrial fibrillation.
+
+```{r}
+any_mod_factor_or_comorbidity_no_exclusions_val_43_84 <- dbGetQuery(con, "SELECT COUNT(DISTINCT patid) AS n_ppl
+        FROM p068_cohort_43_84_joined
+        WHERE mod_factor_or_comorbidity = 1
+        AND exclusion = 0;") %>% pull(n_ppl) %>% pluck(1) %>% as.numeric()
+
+any_mod_factor_or_comorbidity_no_exclusions <- tibble(variable = "any_mod_factor_or_comorbidity_no_exclusions",
+                  description = "The number with no exclusions with any of the following modifiable risk factors or comorbidities: current smoker, obesity, hypertension, hypercholesterolemia, type 2 diabetes, erectile dysfunction, serious mental illness, rheumatoid arthritis, systemic lupus erythematosus or atrial fibrillation",
+                  value_aged_43_84 = any_mod_factor_or_comorbidity_no_exclusions_val_43_84,
                   value_aged_45_84 = NA_real_)
 ```
 
@@ -348,6 +417,16 @@ The number of people, with no exclusion and a modifiable risk factor, with a rec
 cvdriskass2020_mod_val_43_84 <- dbGetQuery(con, "SELECT COUNT(DISTINCT patid) AS n_ppl
     FROM p068_cohort_43_84_joined
     WHERE mod_factor = 1
+    AND exclusion = 0
+    AND cvdriskass2018_obsdate >= '2020-04-01';") %>% pull(n_ppl) %>% pluck(1) %>% as.numeric()
+```
+
+The number of people, with no exclusion and a comorbidity, with a recorded CVD risk assessment score in the preceding 3 years.
+
+```{r}
+cvdriskass2020_comorb_val_43_84 <- dbGetQuery(con, "SELECT COUNT(DISTINCT patid) AS n_ppl
+    FROM p068_cohort_43_84_joined
+    WHERE comorbidity = 1
     AND exclusion = 0
     AND cvdriskass2018_obsdate >= '2020-04-01';") %>% pull(n_ppl) %>% pluck(1) %>% as.numeric()
 ```
@@ -455,6 +534,7 @@ cvdriskass2020_afib_val_43_84 <- dbGetQuery(con, "SELECT COUNT(DISTINCT patid) A
 ```{r}
 result_43_84 <- tibble(variable = c("cvdriskass2020_mod_comorb",
                                     "cvdriskass2020_mod",
+                                    "cvdriskass2020_comorb",
                                     "cvdriskass2020_smoker",
                                     "cvdriskass2020_obese",
                                     "cvdriskass2020_hyp",
@@ -466,20 +546,22 @@ result_43_84 <- tibble(variable = c("cvdriskass2020_mod_comorb",
                                     "cvdriskass2020_sle",
                                     "cvdriskass2020_afib"
                                     ),
-                  description = c("The number of people, with no exclusion and a modifiable risk factor or comorbidity, with a recorded CVD risk assessment score in the preceding 3 years",
-                                  "The number of people, with no exclusion and a modifiable risk factor, with a recorded CVD risk assessment score in the preceding 3 years",
-                                  "The number of people who are current smokers, with no exclusion, with a recorded CVD risk assessment score in the preceding 3 years",
-                                  "The number of people who are obese, with no exclusion, with a recorded CVD risk assessment score in the preceding 3 years",
-                                  "The number of people with hypertension, with no exclusion, with a recorded CVD risk assessment score in the preceding 3 years", 
-                                  "The number of people with hypercholesterolemia, with no exclusion, with a recorded CVD risk assessment score in the preceding 3 years",
-                                  "The number of people with type 2 diabetes, with no exclusion, with a recorded CVD risk assessment score in the preceding 3 years",
-                                  "The number of people with erectile dysfunction, with no exclusion, with a recorded CVD risk assessment score in the preceding 3 years",
-                                  "The number of people with serious mental illness, with no exclusion, with a recorded CVD risk assessment score in the preceding 3 years",
-                                  "The number of people with rheumatoid arthritis, with no exclusion, with a recorded CVD risk assessment score in the preceding 3 years",
-                                  "The number of people with systemic lupus erythematosus, with no exclusion, with a recorded CVD risk assessment score in the preceding 3 years",
-                                  "The number of people with atrial fibrillation, with no exclusion, with a recorded CVD risk assessment score in the preceding 3 years"),
+                  description = c("The number of people, with no exclusions and with a modifiable risk factor or comorbidity, with a recorded CVD risk assessment score in the preceding 3 years",
+                                  "The number of people, with no exclusions and with a modifiable risk factor, with a recorded CVD risk assessment score in the preceding 3 years",
+                                  "The number of people, with no exclusions and with a comorbidity, with a recorded CVD risk assessment score in the preceding 3 years",
+                                  "The number of people who are current smokers, with no exclusions, with a recorded CVD risk assessment score in the preceding 3 years",
+                                  "The number of people who are obese, with no exclusions, with a recorded CVD risk assessment score in the preceding 3 years",
+                                  "The number of people with hypertension, with no exclusions, with a recorded CVD risk assessment score in the preceding 3 years", 
+                                  "The number of people with hypercholesterolemia, with no exclusions, with a recorded CVD risk assessment score in the preceding 3 years",
+                                  "The number of people with type 2 diabetes, with no exclusions, with a recorded CVD risk assessment score in the preceding 3 years",
+                                  "The number of people with erectile dysfunction, with no exclusions, with a recorded CVD risk assessment score in the preceding 3 years",
+                                  "The number of people with serious mental illness, with no exclusions, with a recorded CVD risk assessment score in the preceding 3 years",
+                                  "The number of people with rheumatoid arthritis, with no exclusions, with a recorded CVD risk assessment score in the preceding 3 years",
+                                  "The number of people with systemic lupus erythematosus, with no exclusions, with a recorded CVD risk assessment score in the preceding 3 years",
+                                  "The number of people with atrial fibrillation, with no exclusions, with a recorded CVD risk assessment score in the preceding 3 years"),
                   value_aged_43_84 = c(cvdriskass2020_mod_comorb_val_43_84,
                                        cvdriskass2020_mod_val_43_84,
+                                       cvdriskass2020_comorb_val_43_84,
                                        cvdriskass2020_smoker_val_43_84,
                                        cvdriskass2020_obese_val_43_84,
                                        cvdriskass2020_hyp_val_43_84,
@@ -491,13 +573,13 @@ result_43_84 <- tibble(variable = c("cvdriskass2020_mod_comorb",
                                        cvdriskass2020_sle_val_43_84,
                                        cvdriskass2020_afib_val_43_84
                                        ),
-                  value_aged_45_84 = rep(NA_real_, 12))
+                  value_aged_45_84 = rep(NA_real_, 13))
 ```
 
 # Write data
 
 ```{r}
-results <- bind_rows(cohort_numbers, mod_factor_results, comorbidity_results, any_mod_factor, any_mod_factor_or_comorbidity, exclusion_results, any_exclusion, result_45_84, result_43_84) %>% 
+results <- bind_rows(cohort_numbers, mod_factor_results, comorbidity_results, any_mod_factor, any_mod_factor_no_exclusions, any_comorbidity, any_comorbidity_no_exclusions, any_mod_factor_or_comorbidity, any_mod_factor_or_comorbidity_no_exclusions, exclusion_results, any_exclusion, result_45_84, result_43_84) %>% 
     mutate(across(starts_with("value"), \(x) round(x/5)*5))
 ```
 

@@ -174,7 +174,7 @@ FROM p068_cohort_45_84;
 
 -- Number of practices
 SELECT COUNT(DISTINCT pracid)
-FROM p068_cohort_43_84; -- 1727
+FROM p068_cohort_43_84; -- 1609
 
 SELECT COUNT(DISTINCT pracid)
-FROM p068_cohort_45_84; -- 1726
+FROM p068_cohort_45_84; -- 1609
