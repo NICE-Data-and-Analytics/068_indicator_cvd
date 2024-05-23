@@ -1,40 +1,33 @@
 USE cprd2023;
 
-/* Identify cohort for IND2023-164
-For IND2023-164, the denominator is every person who meets the following inclusion criteria on 31st March 2023 (the end date):
-•	Aged 45 to 84 
-•	Registered at a CPRD-contributing practice 
+/*
 */
+# Drop table if exists
+DROP TABLE IF EXISTS aurum_practices_2023_12;
 
-DROP TABLE IF EXISTS p068_cohort_45_84;
+# Create practice table
+CREATE TABLE IF NOT EXISTS aurum_practices_2023_12 (
+        pracid INT PRIMARY KEY,
+        lcd DATE,
+        uts DATE,
+        region INT
+    );
 
-CREATE TABLE p068_cohort_45_84 (
-	SELECT patid, gender, regstartdate, regenddate, pracid, mock_yob AS yob, age 
-	FROM ( -- Calculate age at 2023-03-31 (end/achievement date)
-		SELECT *, TIMESTAMPDIFF(YEAR, mock_yob, '2023-03-31') AS age 
-		FROM ( -- Get approximate date of birth using July 1st of year of birth
-			SELECT *, STR_TO_DATE(CONCAT(yob, "-07-01"), "%Y-%m-%d") AS mock_yob 
-			FROM ( -- Join with patient info 
-				SELECT patid, gender, yob, regstartdate, regenddate, pracid
-				FROM acceptable_pats_2023_12
-				) AS t1
-			) AS t2
-		) AS t3
-	WHERE age BETWEEN 45 AND 84
-	AND (regenddate IS NULL OR regenddate > "2023-03-31")
-	AND pracid NOT IN ( -- Not in absorbed practices
-		SELECT pracid
-		FROM absorbed_practices_2023_12)
-);
-    
-SELECT COUNT(DISTINCT patid) -- 6659529
-FROM p068_cohort_45_84;
-
-SELECT MIN(regenddate), MIN(age), MAX(age)
-FROM p068_cohort_45_84;
-
-SELECT *
-FROM p068_cohort_45_84
+# Load file
+LOAD DATA LOCAL INFILE 'C:/Users/Public/Documents/cprd_files/202312_CPRDAurum/202312_CPRDAurum_Practices.txt'
+    INTO TABLE aurum_practices_2023_12
+    FIELDS TERMINATED BY '\t'
+    LINES TERMINATED BY '\r\n'
+    IGNORE 1 ROWS
+    (@pracid, @lcd, @uts, @region)
+    SET
+    	pracid = NULLIF(@pracid,''),
+    	lcd = NULLIF(STR_TO_DATE(@lcd, '%d/%m/%Y'), '0000-00-00'),
+        uts = NULLIF(STR_TO_DATE(@uts, '%d/%m/%Y'), '0000-00-00'),
+        region = NULLIF(@region,'');
+        
+SELECT * 
+FROM aurum_practices_2023_12
 LIMIT 10;
 
 /* Identify base population for IND2023-165 and IND2023-166
@@ -45,25 +38,28 @@ The denominator is every person who, on 31st March 2023 (the end date), meets th
 DROP TABLE IF EXISTS p068_cohort_43_84;
 
 CREATE TABLE p068_cohort_43_84 (
-	SELECT patid, gender, regstartdate, regenddate, pracid, mock_yob AS yob, age 
+	SELECT patid, gender, regstartdate, regenddate, pracid, cprd_ddate, mock_yob AS yob, age 
 	FROM ( -- Calculate age at 2023-03-31 (end/achievement date)
 		SELECT *, TIMESTAMPDIFF(YEAR, mock_yob, '2023-03-31') AS age 
 		FROM ( -- Get approximate date of birth using July 1st of year of birth
 			SELECT *, STR_TO_DATE(CONCAT(yob, "-07-01"), "%Y-%m-%d") AS mock_yob 
-			FROM ( -- Join with patient info 
-				SELECT patid, gender, yob, regstartdate, regenddate, pracid
-				FROM acceptable_pats_2023_12
-				) AS t1
+            -- Join with patient info 
+			FROM acceptable_pats_2023_12 AS t1
 			) AS t2
 		) AS t3
 	WHERE age BETWEEN 43 AND 84
 	AND (regenddate IS NULL OR regenddate > "2023-03-31")
+    AND (cprd_ddate IS NULL OR cprd_ddate > "2023-03-31")
 	AND pracid NOT IN ( -- Not in absorbed practices
 		SELECT pracid
 		FROM absorbed_practices_2023_12)
+	AND pracid IN ( -- last collection date for practice after 
+		SELECT pracid
+		FROM aurum_practices_2023_12
+		WHERE lcd > "2023-03-31")	
 );
     
-SELECT COUNT(DISTINCT patid) -- 7114713
+SELECT COUNT(DISTINCT patid) -- 6691383
 FROM p068_cohort_43_84;
 
 SELECT MIN(regenddate), MIN(age), MAX(age)
@@ -71,6 +67,29 @@ FROM p068_cohort_43_84;
 
 SELECT *
 FROM p068_cohort_43_84
+LIMIT 10;
+
+/* Identify cohort for IND2023-164
+For IND2023-164, the denominator is every person who meets the following inclusion criteria on 31st March 2023 (the end date):
+•	Aged 45 to 84 
+•	Registered at a CPRD-contributing practice 
+*/
+
+DROP TABLE IF EXISTS p068_cohort_45_84;
+
+CREATE TABLE p068_cohort_45_84
+	SELECT *
+    FROM p068_cohort_43_84
+    WHERE age BETWEEN 45 AND 84;
+    
+SELECT COUNT(DISTINCT patid) -- 6258481
+FROM p068_cohort_45_84;
+
+SELECT MIN(regenddate), MIN(age), MAX(age)
+FROM p068_cohort_45_84;
+
+SELECT *
+FROM p068_cohort_45_84
 LIMIT 10;
 
 /* Check if all patients in p068_cohort_45_84 are in p068_cohort_43_84 */
@@ -153,5 +172,9 @@ FROM p068_cohort_45_84;
 -- SELECT MIN(linkdate), MAX(linkdate)
 -- FROM p068_cohort_45_84_lsoa;
 
-SELECT *
-FROM p068_cohort_43_84_lsoa;
+-- Number of practices
+SELECT COUNT(DISTINCT pracid)
+FROM p068_cohort_43_84; -- 1727
+
+SELECT COUNT(DISTINCT pracid)
+FROM p068_cohort_45_84; -- 1726

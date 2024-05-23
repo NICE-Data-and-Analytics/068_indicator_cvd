@@ -83,3 +83,7 @@ SELECT COUNT(*) FROM p068_codes;
 
 SELECT DISTINCT category
 FROM p068_codes;
+
+SELECT *
+FROM lookup_numunitid
+WHERE code = 822;
