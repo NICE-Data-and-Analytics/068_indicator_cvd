@@ -1,0 +1,259 @@
+---
+title: "Load IMD"
+format: html
+---
+
+```{r}
+# Set time zone
+Sys.setenv(TZ='Europe/London')
+
+# Download and attach standard packages
+if (!require(pacman)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(tidyverse, here, janitor, RMariaDB, DBI, glue, renv, dbplyr)
+
+i_am("R/load_imd.qmd")
+```
+
+```{r}
+# Connect to CPRD database -------------------
+
+# Connect to the MySQL database: con
+con <- dbConnect(RMariaDB::MariaDB(), 
+                 dbname = "cprd2023", 
+                 host = "cprd-sea-2023.cisllnygqz7r.eu-west-2.rds.amazonaws.com", 
+                 port = 3306,
+                 user = "test",
+                 password = "password")
+```
+
+## Load and join IMD data
+
+```{r}
+#| eval: false
+
+# Create table
+# Drop temporary table if exists
+dbExecute(con, glue("DROP TABLE IF EXISTS p068_imd;"))
+    
+# Create temp tables
+dbExecute(con, glue("CREATE TABLE p068_imd (
+        patid VARCHAR(19) PRIMARY KEY,
+        pracid INT,
+        e2019_imd_5 INT
+);"))
+    
+# Load data into temporary table
+load_query <- glue("LOAD DATA LOCAL INFILE '{here()}/data/24_003834_type2_request/Results/Aurum_linked/Final/patient_2019_imd_24_003834.txt'
+        INTO TABLE p068_imd
+        FIELDS TERMINATED BY '\\t'
+        LINES TERMINATED BY '\\r\\n'
+        IGNORE 1 ROWS 
+        (@patid, @pracid, @e2019_imd_5) 
+        SET
+            patid = NULLIF(@patid,''), 
+            pracid = NULLIF(@pracid,''), 
+            e2019_imd_5 = NULLIF(@e2019_imd_5,'');")
+    
+dbExecute(con, load_query)
+```
+
+```{r}
+dbGetQuery(con, "SELECT COUNT(patid), COUNT(DISTINCT patid) FROM p068_imd;")
+```
+```{r}
+# Join IMD to joined table
+dbExecute(con, "DROP TEMPORARY TABLE IF EXISTS p068_cohort_43_84_joined_imd;")
+
+dbExecute(con, "CREATE TEMPORARY TABLE p068_cohort_43_84_joined_imd
+                SELECT c.*,
+                    CASE
+                        WHEN e2019_imd_5 = 1 THEN '1 - Least deprived'
+                        WHEN e2019_imd_5 = 5 THEN '5 - Most deprived'
+                        ELSE e2019_imd_5
+                    END AS imd_quintile
+                FROM p068_cohort_43_84_joined AS c
+                LEFT JOIN p068_imd AS i ON c.patid = i.patid;")
+```
+## Number of people in each IMD quintile
+
+```{r}
+imd_43_84 <- dbGetQuery(con, "SELECT imd_quintile, COUNT(DISTINCT patid) AS value_aged_43_84
+    FROM p068_cohort_43_84_joined_imd
+    GROUP BY imd_quintile;") %>% 
+    mutate(variable = "n_cohort",
+           description = "The number of people in that age group registered in CPRD on 31 March 2023")
+
+imd_45_84 <- dbGetQuery(con, "SELECT imd_quintile, COUNT(DISTINCT patid) AS value_aged_45_84
+    FROM p068_cohort_43_84_joined_imd
+    WHERE patid IN (SELECT patid FROM p068_cohort_45_84)
+    GROUP BY imd_quintile;")
+
+imd_n <- imd_43_84 %>% 
+    left_join(imd_45_84, by = "imd_quintile")
+```
+
+## Exclusions, modifiable risk factors and comorbidities
+
+```{r}
+no_exclusions_43_84 <- dbGetQuery(con, "SELECT imd_quintile, COUNT(DISTINCT patid) AS value_aged_43_84
+    FROM p068_cohort_43_84_joined_imd
+    WHERE exclusion = 0
+    GROUP BY imd_quintile;") %>% 
+    mutate(variable = "no_exclusions",
+           description = "The number of people with none of the following exclusions: type 1 diabetes, CVD, famililal hypercholesterolaemia, CKD stage 3 to 5, current LLT, previous CVD risk of 20% or more")
+
+no_exclusions_45_84 <- dbGetQuery(con, "SELECT imd_quintile, COUNT(DISTINCT patid) AS value_aged_45_84
+    FROM p068_cohort_43_84_joined_imd
+    WHERE patid IN (SELECT patid FROM p068_cohort_45_84)
+    AND exclusion = 0
+    GROUP BY imd_quintile;")
+
+no_exclusions <- no_exclusions_43_84 %>% 
+    left_join(no_exclusions_45_84, by = "imd_quintile")
+```
+
+```{r}
+any_mod_factor_no_exclusions <- dbGetQuery(con, "SELECT imd_quintile, COUNT(DISTINCT patid) AS value_aged_43_84
+    FROM p068_cohort_43_84_joined_imd
+    WHERE mod_factor = 1
+    AND exclusion = 0
+    GROUP BY imd_quintile;") %>% 
+    mutate(variable = "any_mod_factor_no_exclusions",
+           description = "The number with no exclusions with any of the following modifiable risk factors: current smoker, obesity, hypertension or hypercholesterolemia")
+```
+
+```{r}
+any_comorbidity_no_exclusions <- dbGetQuery(con, "SELECT imd_quintile, COUNT(DISTINCT patid) AS value_aged_43_84
+    FROM p068_cohort_43_84_joined_imd
+    WHERE comorbidity = 1
+    AND exclusion = 0
+    GROUP BY imd_quintile;") %>% 
+    mutate(variable = "any_comorbidity_no_exclusions",
+           description = "The number with no exclusions with any of the following comorbidities: type 2 diabetes, erectile dysfunction, serious mental illness, rheumatoid arthritis, systemic lupus erythematosus or atrial fibrillation")
+```
+
+```{r}
+any_mod_factor_or_comorbidity_no_exclusions <- dbGetQuery(con, "SELECT imd_quintile, COUNT(DISTINCT patid) AS value_aged_43_84
+    FROM p068_cohort_43_84_joined_imd
+    WHERE mod_factor_or_comorbidity = 1
+    AND exclusion = 0
+    GROUP BY imd_quintile;") %>% 
+    mutate(variable = "any_mod_factor_or_comorbidity_no_exclusions",
+           description = "The number with no exclusions with any of the following modifiable risk factors or comorbidities: current smoker, obesity, hypertension, hypercholesterolemia, type 2 diabetes, erectile dysfunction, serious mental illness, rheumatoid arthritis, systemic lupus erythematosus or atrial fibrillation")
+```
+
+## Age 45 to 84 indicator - IND2023-164
+
+```{r}
+cvdriskass2018 <- dbGetQuery(con, "SELECT imd_quintile, COUNT(DISTINCT patid) AS value_aged_45_84
+    FROM p068_cohort_43_84_joined_imd
+    WHERE patid IN (SELECT patid FROM p068_cohort_45_84)
+    AND exclusion = 0
+    AND cvdriskass2018_medcodeid IS NOT NULL
+    GROUP BY imd_quintile;") %>% 
+    mutate(variable = "cvdriskass2018",
+           description = "The number of people with no exclusion, with a recorded CVD risk assessment score in the preceding 5 years")
+```
+
+```{r}
+cvdriskass2018_nhshc <- dbGetQuery(con, "SELECT imd_quintile, COUNT(DISTINCT patid) AS value_aged_45_84
+    FROM p068_cohort_43_84_joined_imd
+    WHERE patid IN (SELECT patid FROM p068_cohort_45_84)
+    AND exclusion = 0
+    AND cvdriskass2018_medcodeid IS NOT NULL
+    AND nhs_health_check2018_medcodeid IS NOT NULL
+    GROUP BY imd_quintile;") %>% 
+    mutate(variable = "cvdriskass2018_nhshc",
+           description = "The number of people with no exclusion, had an NHS health check and have a recorded CVD risk assessment score in the preceding 5 years")
+```
+
+```{r}
+cvdriskass2020 <- dbGetQuery(con, "SELECT imd_quintile, COUNT(DISTINCT patid) AS value_aged_45_84
+    FROM p068_cohort_43_84_joined_imd
+    WHERE patid IN (SELECT patid FROM p068_cohort_45_84)
+    AND exclusion = 0
+    AND cvdriskass2018_obsdate >= '2020-04-01'
+    GROUP BY imd_quintile;") %>% 
+    mutate(variable = "cvdriskass2020",
+           description = "The number of people with no exclusion, with a recorded CVD risk assessment score in the preceding 3 years")
+```
+
+```{r}
+cvdriskass2022 <- dbGetQuery(con, "SELECT imd_quintile, COUNT(DISTINCT patid) AS value_aged_45_84
+    FROM p068_cohort_43_84_joined_imd
+    WHERE patid IN (SELECT patid FROM p068_cohort_45_84)
+    AND exclusion = 0
+    AND cvdriskass2018_obsdate >= '2022-04-01'
+    GROUP BY imd_quintile;") %>% 
+    mutate(variable = "cvdriskass2022",
+           description = "The number of people, with no exclusion, with a recorded CVD risk assessment score in the preceding 1 years")
+```
+
+## Age 43 to 84 indicator - IND2023-165 and IND2023-166
+
+```{r}
+cvdriskass2020_mod_comorb <- dbGetQuery(con, "SELECT imd_quintile, COUNT(DISTINCT patid) AS value_aged_43_84
+    FROM p068_cohort_43_84_joined_imd
+    WHERE exclusion = 0
+    AND mod_factor_or_comorbidity = 1
+    AND cvdriskass2018_obsdate >= '2020-04-01'
+    GROUP BY imd_quintile;") %>% 
+    mutate(variable = "cvdriskass2020_mod_comorb",
+           description = "The number of people, with no exclusions and with a modifiable risk factor or comorbidity, with a recorded CVD risk assessment score in the preceding 3 years")
+```
+
+```{r}
+cvdriskass2020_mod <- dbGetQuery(con, "SELECT imd_quintile, COUNT(DISTINCT patid) AS value_aged_43_84
+    FROM p068_cohort_43_84_joined_imd
+    WHERE exclusion = 0
+    AND mod_factor = 1
+    AND cvdriskass2018_obsdate >= '2020-04-01'
+    GROUP BY imd_quintile;") %>% 
+    mutate(variable = "cvdriskass2020_mod",
+           description = "The number of people, with no exclusions and with a modifiable risk factor, with a recorded CVD risk assessment score in the preceding 3 years")
+```
+
+```{r}
+cvdriskass2020_comorb <- dbGetQuery(con, "SELECT imd_quintile, COUNT(DISTINCT patid) AS value_aged_43_84
+    FROM p068_cohort_43_84_joined_imd
+    WHERE exclusion = 0
+    AND comorbidity = 1
+    AND cvdriskass2018_obsdate >= '2020-04-01'
+    GROUP BY imd_quintile;") %>% 
+    mutate(variable = "cvdriskass2020_comorb",
+           description = "The number of people, with no exclusions and with a comorbidity, with a recorded CVD risk assessment score in the preceding 3 years")
+```
+
+# Write data
+
+```{r}
+df <- bind_rows(imd_n,
+                no_exclusions,
+                any_mod_factor_no_exclusions,
+                any_comorbidity_no_exclusions,
+                any_mod_factor_or_comorbidity_no_exclusions,
+                cvdriskass2018,
+                cvdriskass2018_nhshc,
+                cvdriskass2020,
+                cvdriskass2022,
+                cvdriskass2020_mod_comorb,
+                cvdriskass2020_mod,
+                cvdriskass2020_comorb) %>% 
+    mutate(value = NA_real_,
+           imd_quintile = replace_na(imd_quintile, "NA")) %>% 
+    mutate(across(starts_with("value"), \(x) round(x/5)*5)) %>% 
+    select(variable, description, imd_quintile, value, value_aged_43_84, value_aged_45_84)
+```
+
+```{r}
+# Write csv
+df %>% 
+    select(-variable) %>% 
+    write_csv(here("data", "068_cvd_indicator_results_imd.csv"),
+              na = "",
+              quote = "all")
+```
+
