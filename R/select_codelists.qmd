@@ -1,0 +1,1510 @@
+---
+title: "Selecting codelists"
+format: html
+---
+
+<!-- This code is run in a separate project. Copying here for completeness -->
+
+```{r}
+if (!require(pacman)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(tidyverse, here, janitor)
+
+i_am("select_codelists.qmd")
+
+# Don't show scientific notation
+options(scipen=999)
+
+# Write files?
+write_init <- FALSE
+
+write_compiled <- TRUE
+```
+
+```{r}
+refset <- read_delim(here("data", "raw", "20231229_PCD_Refset_Content.txt"), col_types = "cccccc") %>% 
+    clean_names()
+```
+
+```{r}
+med_codes <- read_delim(here("data", "raw", "CPRDAurumMedical_202312_Aurum.txt"), col_types = "cdccccccc") %>% 
+    clean_names()
+
+product_codes <- read_delim(here("data", "raw", "CPRDAurumProduct_202312_Aurum.txt"), col_types = "cccccccccd") %>% 
+    clean_names()
+```
+
+# Functions
+
+```{r}
+get_cluster <- function(cluster, rs = refset) {
+    rs %>% 
+        filter(cluster_id == cluster)
+}
+
+get_cprd_codes <- function(input, mc = med_codes) {
+    input %>% 
+        distinct(snomed_code, .keep_all = T) %>% 
+        left_join(mc, by = c("snomed_code" = "snomed_ct_concept_id")) %>% 
+        arrange(desc(observations))
+}
+
+write_cprd_codes <- function(input, nm, cprd = F) {
+    if (cprd) {
+        input %>% 
+            select(med_code_id:term, snomed_code, snomed_ct_description_id) %>% 
+            filter(!is.na(med_code_id)) %>% 
+            rename(snomed_ct_concept_id = snomed_code) %>% 
+            write_delim(here("data", "codelists", paste0(nm, "_cprd.txt")))
+    } else {
+        write_delim(input, here("data", "codelists", paste0(nm, ".txt")))
+    }
+}
+```
+
+# Initial selection
+## Smoking
+
+```{r}
+smoking_cluster_ids <- c("SMOK_COD", "LSMOK_COD")
+
+smoking_clusters <- smoking_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+```
+
+```{r}
+# All of lsmok codes in smok
+smoking_clusters$SMOK_COD %>% 
+    mutate(lsmok = snomed_code %in% unique(smoking_clusters$LSMOK_COD$snomed_code)) %>% 
+    summarise(sum = sum(lsmok))
+```
+
+```{r}
+# Join to get CPRD codes
+smoking_cprd <- smoking_clusters %>% 
+    set_names(smoking_cluster_ids) %>% 
+    map(get_cprd_codes)
+
+```
+
+```{r}
+# Any more possible smoking codes? Manually sort later
+more_smoking_codes <- med_codes %>% 
+    filter(str_detect(str_to_lower(term), "(smok)|(cigar)|(tobacco)")) %>% 
+    # Drop family history
+    filter(str_detect(str_to_lower(term), "(\\bfh\\b)|(family history)", negate = T)) %>% 
+    mutate(already_identified = med_code_id %in% unique(smoking_cprd$SMOK_COD$med_code_id)) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+
+```{r}
+#| eval: !expr write_init
+
+smoking_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+smoking_cprd %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx, cprd = T))
+
+write_delim(more_smoking_codes, here("data", "codelists", "smoking_codes_to_sort.txt"))
+```
+
+## Obesity
+
+```{r}
+obesity_cluster_ids <- c("BMI30_COD", "BMIOBESE_COD", "LBMI40_COD")
+
+obesity_clusters <- obesity_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+
+obesity_cprd <- obesity_clusters %>% 
+    bind_rows() %>% 
+    get_cprd_codes()
+```
+
+```{r}
+notobese_cluster_ids <- c("BMIHEALTHY_COD", "BMIOVER_COD", "BMIUNDER_COD")
+
+notobese_clusters <- notobese_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+
+notobese_cprd <- notobese_clusters %>% 
+    bind_rows() %>% 
+    get_cprd_codes()
+```
+
+```{r}
+# Codes for BMI value
+bmival <- get_cluster("BMIVAL_COD")
+bmival_cprd <- get_cprd_codes(bmival)
+```
+
+```{r}
+# Any more possible obesity codes? Manually sort later
+more_obesity_codes <- med_codes %>% 
+    # obes (not preceded by "l", "lobes")
+    # bmi (not preceded by "su", "submit")
+    filter(str_detect(str_to_lower(term), "((?<!l)obes(?!\\s))|((?<!su)bmi)|(body mass index)")) %>%
+    # Drop family history
+    filter(str_detect(str_to_lower(term), "(\\bfh\\b)|(family history)", negate = T)) %>% 
+    mutate(already_identified = med_code_id %in% (bind_rows(obesity_cprd, notobese_cprd, bmival_cprd) %>% pull(med_code_id) %>% unique())) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_init
+
+obesity_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+notobese_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+write_cprd_codes(obesity_cprd, "BMI30_BMIOBESE_LBMI40_COD", cprd = T)
+write_cprd_codes(notobese_cprd, "BMIHEALTHY_BMIOVER_BMIUNDER_COD", cprd = T)
+
+write_cprd_codes(bmival, "BMIVAL")
+write_cprd_codes(bmival_cprd, "BMIVAL", cprd = T)
+
+write_delim(more_obesity_codes, here("data", "codelists", "obesity_codes_to_sort.txt"))
+```
+
+## Hypertension
+
+```{r}
+hyp_cluster_ids <- c("HYP_COD", "HYPRES_COD")
+
+hyp_clusters <- hyp_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+
+hyp_cprd <- hyp_clusters %>% 
+    set_names(hyp_cluster_ids) %>% 
+    map(get_cprd_codes)
+```
+
+```{r}
+more_hyp_codes <- med_codes %>% 
+    filter(str_detect(str_to_lower(term), "hypertens")) %>% 
+    # Drop family history
+    filter(str_detect(str_to_lower(term), "(\\bfh\\b)|(family history)", negate = T)) %>% 
+    mutate(already_identified = med_code_id %in% unique(hyp_cprd$HYP_COD$med_code_id)) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_init
+
+hyp_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+hyp_cprd %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx, cprd = T))
+
+write_delim(more_hyp_codes, here("data", "codelists", "hypertension_codes_to_sort.txt"))
+```
+
+## Hypercholesterolaemia
+
+```{r}
+chol_cluster_ids <- c("CHOL_COD", "CHOL2_COD", "LDLCCHOL_COD", "NONHDLCCHOL_COD", "HDLCCHOL_COD", "NONVALCHOL_COD")
+
+chol_clusters <- chol_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+
+chol_cprd <- chol_clusters %>% 
+    set_names(chol_cluster_ids) %>% 
+    map(get_cprd_codes)
+```
+
+```{r}
+more_chol_codes <- med_codes %>% 
+    # ldl (not preceded by "mi", "mildly")
+    filter(str_detect(str_to_lower(term), "(cholesterol)|(hdl)|((?<!mi)ldl)|(density lipoprotein)")) %>% 
+    # Drop family history
+    filter(str_detect(str_to_lower(term), "(\\bfh\\b)|(family history)", negate = T)) %>% 
+    mutate(already_identified = med_code_id %in% (bind_rows(chol_cprd) %>% pull(med_code_id) %>% unique())) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+
+```{r}
+#| eval: !expr write_init
+
+chol_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+chol_cprd %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx, cprd = T))
+
+write_delim(more_chol_codes, here("data", "codelists", "cholesterol_codes_to_sort.txt"))
+```
+
+## Diabetes
+
+```{r}
+diabetes_cluster_ids <- c("DMTYPE2AUDIT_COD", "DMTYPE1AUDIT_COD", "DMRES_COD")
+
+diabetes_clusters <- diabetes_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+
+diabetes_cprd <- diabetes_clusters %>% 
+    set_names(diabetes_cluster_ids) %>% 
+    map(get_cprd_codes)
+```
+
+```{r}
+more_t2dm_codes <- med_codes %>% 
+    # Must have "diabet", "type" and "2" or "II" in any order
+    filter(str_detect(str_to_lower(term), "^(?=.*\\bdiabet)(?=.*((\\b2\\b)|(\\bII\\b)))(?=.*\\btype\\b).*$")) %>%
+    # Drop family history
+    filter(str_detect(str_to_lower(term), "(\\bfh\\b)|(family history)", negate = T)) %>% 
+    mutate(already_identified = med_code_id %in% unique(diabetes_cprd$DMTYPE2AUDIT_COD$med_code_id)) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+more_t1dm_codes <- med_codes %>% 
+    # Must have "diabet", "type" and "1" or "I" in any order
+    filter(str_detect(str_to_lower(term), "^(?=.*\\bdiabet)(?=.*((\\b1\\b)|(\\bI\\b)))(?=.*\\btype\\b).*$")) %>% 
+    # Drop family history
+    filter(str_detect(str_to_lower(term), "(\\bfh\\b)|(family history)", negate = T)) %>% 
+    mutate(already_identified = med_code_id %in% unique(diabetes_cprd$DMTYPE1AUDIT_COD$med_code_id)) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+
+```{r}
+#| eval: !expr write_init
+
+diabetes_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+diabetes_cprd %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx, cprd = T))
+
+write_delim(more_t2dm_codes, here("data", "codelists", "t2dm_codes_to_sort.txt"))
+
+write_delim(more_t1dm_codes, here("data", "codelists", "t1dm_codes_to_sort.txt"))
+```
+
+## Serious mental illness
+
+```{r}
+mh_cluster_ids <- c("MH_COD", "MHREM_COD")
+
+mh_clusters <- mh_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+
+mh_cprd <- mh_clusters %>% 
+    set_names(mh_cluster_ids) %>% 
+    map(get_cprd_codes)
+```
+
+```{r}
+more_mh_codes <- med_codes %>% 
+    # mania, not preceded by "ro" ("Romania")
+    filter(str_detect(str_to_lower(term), "(bipolar)|(manic)|((?<!ro)mania)|(schizo)|(psychosis)|(psychotic)|(delusion)")) %>% 
+    # Drop family history
+    filter(str_detect(str_to_lower(term), "(\\bfh\\b)|(family history)", negate = T)) %>% 
+    mutate(already_identified = med_code_id %in% unique(mh_cprd$MH_COD$med_code_id)) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_init
+
+mh_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+mh_cprd %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx, cprd = T))
+
+write_delim(more_mh_codes, here("data", "codelists", "mh_codes_to_sort.txt"))
+```
+
+## Rheumatoid arthritis
+
+```{r}
+rarth_cluster_ids <- c("RARTH_COD")
+
+rarth_clusters <- rarth_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+
+rarth_cprd <- rarth_clusters %>% 
+    set_names(rarth_cluster_ids) %>% 
+    map(get_cprd_codes)
+```
+
+```{r}
+more_rarth_codes <- med_codes %>% 
+    # "rheum" and "arth" in any order
+    filter(str_detect(str_to_lower(term), "^(?=.*\\brheum)(?=.*\\barth).*$")) %>% 
+    # Drop family history
+    filter(str_detect(str_to_lower(term), "(\\bfh\\b)|(family history)", negate = T)) %>% 
+    mutate(already_identified = med_code_id %in% unique(rarth_cprd$RARTH_COD$med_code_id)) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_init
+
+rarth_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+rarth_cprd %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx, cprd = T))
+
+write_delim(more_rarth_codes, here("data", "codelists", "rarth_codes_to_sort.txt"))
+```
+
+## Systemic lupus erythematosus
+
+```{r}
+slupus_cluster_ids <- c("SLUPUS_COD")
+
+slupus_clusters <- slupus_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+
+slupus_cprd <- slupus_clusters %>% 
+    set_names(slupus_cluster_ids) %>% 
+    map(get_cprd_codes)
+```
+
+```{r}
+more_slupus_codes <- med_codes %>% 
+    # 
+    filter(str_detect(str_to_lower(term), "lupus")) %>% 
+    mutate(already_identified = med_code_id %in% unique(slupus_cprd$SLUPUS_COD$med_code_id)) %>% 
+    # Drop family history
+    filter(str_detect(str_to_lower(term), "(\\bfh\\b)|(family history)", negate = T)) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_init
+
+slupus_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+slupus_cprd %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx, cprd = T))
+
+write_delim(more_slupus_codes, here("data", "codelists", "slupus_codes_to_sort.txt"))
+```
+
+## Familial hypercholesterolaemia
+
+```{r}
+fhyp_cluster_ids <- c("FHYP_COD")
+
+fhyp_clusters <- fhyp_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+
+fhyp_cprd <- fhyp_clusters %>% 
+    set_names(fhyp_cluster_ids) %>% 
+    map(get_cprd_codes)
+```
+
+```{r}
+more_fhyp_codes <- med_codes %>% 
+    filter(str_detect(str_to_lower(term), "^(?=.*\\bfamilial)(?=.*\\bhypercholesterol).*$")) %>% 
+    # Drop family history
+    filter(str_detect(str_to_lower(term), "(\\bfh\\b)|(family history)", negate = T)) %>% 
+    mutate(already_identified = med_code_id %in% unique(fhyp_cprd$FHYP_COD$med_code_id)) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_init
+
+fhyp_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+fhyp_cprd %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx, cprd = T))
+
+write_delim(more_fhyp_codes, here("data", "codelists", "fhyp_codes_to_sort.txt"))
+```
+
+## CKD stage 3a to 5
+
+```{r}
+ckd_cluster_ids <- c("CKD_COD", "CKDRES_COD", "CKD1AND2_COD")
+
+ckd_clusters <- ckd_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+
+ckd_cprd <- ckd_clusters %>% 
+    set_names(ckd_cluster_ids) %>% 
+    map(get_cprd_codes)
+```
+
+```{r}
+more_ckd_codes <- med_codes %>% 
+    # Not followed by epi (EGFR CKD epi equation)
+    filter(str_detect(str_to_lower(term), "(chronic kidney disease(?! epi))|(ckd(?!-epi))")) %>% 
+    # Drop family history
+    filter(str_detect(str_to_lower(term), "(\\bfh\\b)|(family history)", negate = T)) %>% 
+    mutate(already_identified = med_code_id %in% (bind_rows(ckd_cprd) %>% pull(med_code_id) %>% unique())) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_init
+
+ckd_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+ckd_cprd %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx, cprd = T))
+
+write_delim(more_ckd_codes, here("data", "codelists", "ckd_codes_to_sort.txt"))
+```
+
+## CHD
+
+```{r}
+chd_cluster_ids <- c("CHD_COD")
+
+chd_clusters <- chd_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+
+chd_cprd <- chd_clusters %>% 
+    set_names(chd_cluster_ids) %>% 
+    map(get_cprd_codes)
+```
+
+```{r}
+more_chd_codes <- med_codes %>% 
+    # ischaemic heart, angina, myocardial infarct, chd, coronary heart/artery, acute coronary syndrome, vessel disease
+    filter(str_detect(str_to_lower(term), "(isch(a?)emi)|(angina)|(chd)|(vessel disease)|(myocardial)|(coronary)|(angioplasty)|(\\bstent\\b)")) %>% 
+    # Drop family history
+    filter(str_detect(str_to_lower(term), "(framingham)|(\\bfh\\b)|(family history)", negate = T)) %>% 
+    mutate(already_identified = med_code_id %in% unique(chd_cprd$CHD_COD$med_code_id)) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_init
+
+chd_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+chd_cprd %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx, cprd = T))
+
+write_delim(more_chd_codes, here("data", "codelists", "chd_codes_to_sort.txt"))
+```
+
+## Stroke, excluding haemorrhagic stroke
+
+```{r}
+strk_cluster_ids <- c("STRK_COD", "HSTRK_COD", "OSTR_COD")
+
+strk_clusters <- strk_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+
+strk_cprd <- strk_clusters %>% 
+    set_names(strk_cluster_ids) %>% 
+    map(get_cprd_codes)
+```
+
+```{r}
+more_strk_codes <- med_codes %>% 
+    # stroke or cva
+    # cerebr followed by occlu, thromb, infarct, embol, ischaem, accident
+    filter(str_detect(str_to_lower(term), "(stroke)|(\\bcva\\b)") | str_detect(str_to_lower(term), "^(?=.*cerebr)(?=.*((occlu)|(thromb)|(infarct)|(embol)|(isch(a?)em)|(accident))).*$")) %>% 
+    # Drop family history, score, melas, qstroke, heat stroke, sunstroke, haemorrhage
+    filter(str_detect(str_to_lower(term), "(h(a?)emorrhag)|(\\bscore)|(qstroke)|(melas)|(heat stroke)|(sunstroke)|(\\bfh\\b)|(family history)", negate = T)) %>% 
+    mutate(already_identified = med_code_id %in% (bind_rows(strk_cprd) %>% pull(med_code_id) %>% unique())) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+# STRK codes excluding HSTRK and haemorrhagic
+strk_cprd$STRK_MINUS_HSTRK_COD <- strk_cprd$STRK_COD %>% 
+    # Not in HSTRK
+    filter(!(med_code_id %in% strk_cprd$HSTRK_COD$med_code_id)) %>% 
+    filter(str_detect(term, "h(a?)emorrhag", negate = T))
+```
+
+```{r}
+#| eval: !expr write_init
+
+strk_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+strk_cprd %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx, cprd = T))
+
+write_delim(more_strk_codes, here("data", "codelists", "strk_codes_to_sort.txt"))
+```
+
+## PAD
+
+```{r}
+pad_cluster_ids <- c("PAD_COD")
+
+pad_clusters <- pad_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+
+pad_cprd <- pad_clusters %>% 
+    set_names(pad_cluster_ids) %>% 
+    map(get_cprd_codes)
+```
+
+```{r}
+more_pad_codes <- med_codes %>% 
+    # Not followed by epi (EGFR CKD epi equation)
+    filter(str_detect(str_to_lower(term), "peripheral ((vascular)|(arterial)|(angiopath))") | str_detect(str_to_lower(term), "^(?=.*isch(a?)e)(?=.*((leg|foot|feet|lower limb))).*$")) %>% 
+    # Drop family history
+    filter(str_detect(str_to_lower(term), "(\\bfh\\b)|(family history)", negate = T)) %>% 
+    mutate(already_identified = med_code_id %in% unique(pad_cprd$PAD_COD$med_code_id)) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_init
+
+pad_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+pad_cprd %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx, cprd = T))
+
+write_delim(more_pad_codes, here("data", "codelists", "pad_codes_to_sort.txt"))
+```
+
+## TIA
+
+```{r}
+tia_cluster_ids <- c("TIA_COD")
+
+tia_clusters <- tia_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+
+tia_cprd <- tia_clusters %>% 
+    set_names(tia_cluster_ids) %>% 
+    map(get_cprd_codes)
+```
+
+```{r}
+more_tia_codes <- med_codes %>% 
+    # Not followed by epi (EGFR CKD epi equation)
+    filter(str_detect(str_to_lower(term), "^(?=.*transient)(?=.*isch(a?)e).*$")) %>% 
+    # Drop family history
+    filter(str_detect(str_to_lower(term), "(score)|(\\bfh\\b)|(family history)", negate = T)) %>% 
+    mutate(already_identified = med_code_id %in% unique(tia_cprd$TIA_COD$med_code_id)) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_init
+
+tia_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+tia_cprd %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx, cprd = T))
+
+write_delim(more_tia_codes, here("data", "codelists", "tia_codes_to_sort.txt"))
+```
+
+## CVD risk assessment
+
+```{r}
+cvdriskass_cluster_ids <- c("CVDRISKASS_COD", "QRISK_COD")
+
+cvdriskass_clusters <- cvdriskass_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+
+cvdriskass_cprd <- cvdriskass_clusters %>% 
+    set_names(cvdriskass_cluster_ids) %>% 
+    map(get_cprd_codes)
+```
+
+```{r}
+more_cvdriskass_codes <- med_codes %>% 
+    # ASSIGN score (CVD risk assessment tool in Scotland)
+    filter(str_detect(str_to_lower(term), "^(?=.*(cardiovascular disease)|(cvd))(?=.*risk).*$") | str_detect(str_to_lower(term), "(qrisk)|(framingham)|(joint british societies)|(\\bassign\\b)")) %>% 
+    mutate(already_identified = med_code_id %in% (bind_rows(cvdriskass_cprd) %>% pull(med_code_id) %>% unique())) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_init
+
+cvdriskass_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+cvdriskass_cprd %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx, cprd = T))
+
+write_delim(more_cvdriskass_codes, here("data", "codelists", "cvdriskass_codes_to_sort.txt"))
+```
+
+## Atrial fibrillation
+
+```{r}
+afib_cluster_ids <- c("AFIB_COD", "AFIBRES_COD")
+
+afib_clusters <- afib_cluster_ids %>% 
+    set_names() %>% 
+    map(get_cluster)
+
+afib_cprd <- afib_clusters %>% 
+    set_names(afib_cluster_ids) %>% 
+    map(get_cprd_codes)
+```
+
+```{r}
+more_afib_codes <- med_codes %>% 
+    # atrial and flutter or fibrillation
+    filter(str_detect(str_to_lower(term), "^(?=.*atrial)(?=.*((flutter)|(fibrillation))).*$")) %>% 
+    # Drop family history
+    filter(str_detect(str_to_lower(term), "(\\bfh\\b)|(family history)", negate = T)) %>% 
+    mutate(already_identified = med_code_id %in% unique(afib_cprd$AFIB_COD$med_code_id)) %>% 
+    filter(!already_identified) %>% 
+    select(-already_identified) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_init
+
+afib_clusters %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx))
+
+afib_cprd %>% 
+    iwalk(\(x, idx) write_cprd_codes(x, idx, cprd = T))
+
+write_delim(more_afib_codes, here("data", "codelists", "afib_codes_to_sort.txt"))
+```
+
+## NHS health check
+
+```{r}
+nhs_health_check_codes <- med_codes %>% 
+    # NHS and health check in any order
+    filter(str_detect(str_to_lower(term), "^(?=.*nhs)(?=.*health check).*$")) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_init
+
+write_delim(nhs_health_check_codes, here("data", "codelists", "nhs_health_check_codes_to_sort.txt"))
+```
+
+## Erectile dysfunction
+
+```{r}
+erectile_dys_codes <- med_codes %>% 
+    # atrial and flutter or fibrillation
+    filter(str_detect(str_to_lower(term), "erecti")) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_init
+
+write_delim(erectile_dys_codes, here("data", "codelists", "erectile_dysfunction_codes_to_sort.txt"))
+```
+
+## Statins
+
+```{r}
+stat_cod <- read_delim(here("data", "raw", "STAT_COD.txt"), col_types = "cc") %>% 
+    clean_names()
+```
+
+```{r}
+# Get unique chemical names
+stat_regex <- stat_cod %>% 
+    pull(term) %>% 
+    str_trim() %>% 
+    str_extract("(?<=Product containing precisely )\\w+(?=\\s)") %>% 
+    discard(is.na) %>% 
+    unique() %>% 
+    # Get first word
+    c(stat_cod %>%
+        pull(term) %>% 
+        str_trim() %>% 
+        str_extract("^\\w+(?=\\s)") %>% 
+        unique() %>% 
+        str_subset("Product", negate = T)) %>% 
+    str_to_lower() %>% 
+    unique() %>% 
+    # Drop lloydspharmacy
+    str_subset("(lloydspharmacy)|(ezetimibe)", negate = T) %>% 
+    paste("(\\b", ., "\\b)", sep = "") %>%
+    paste(collapse = "|")
+```
+
+
+```{r}
+stat_cprd <- product_codes %>% 
+    filter((dmdid %in% stat_cod$concept_id) | str_detect(str_to_lower(term_from_emis), stat_regex) | str_detect(str_to_lower(product_name), stat_regex) | str_detect(str_to_lower(drug_substance_name), stat_regex)) %>% 
+    arrange(desc(drug_issues))
+```
+
+```{r}
+#| eval: !expr write_init
+
+write_delim(stat_cprd, here("data", "codelists", "STAT_COD_cprd.txt"))
+```
+
+## Ezetimibe
+
+```{r}
+ezetimibe_cod <- read_delim(here("data", "raw", "EZETIMIBE_COD.txt"), col_types = "cc") %>% 
+    clean_names()
+```
+
+```{r}
+ezetimibe_regex <- c("ezetimibe", "nustendi", "ezetrol", "inegy") %>% 
+    paste("(\\b", ., "\\b)", sep = "") %>%
+    paste(collapse = "|")
+```
+
+```{r}
+ezetimibe_cprd <- product_codes %>% 
+    filter((dmdid %in% ezetimibe_cod$concept_id) | str_detect(str_to_lower(term_from_emis), ezetimibe_regex) | str_detect(str_to_lower(product_name), ezetimibe_regex) | str_detect(str_to_lower(drug_substance_name), ezetimibe_regex)) %>% 
+    arrange(desc(drug_issues))
+```
+
+```{r}
+#| eval: !expr write_init
+
+write_delim(ezetimibe_cprd, here("data", "codelists", "EZETIMIBE_COD_cprd.txt"))
+```
+
+
+## PCSK9 inhibitor
+
+```{r}
+pcsk9i_cod <- read_delim(here("data", "raw", "PCSK9I_COD.txt"), col_types = "cc") %>% 
+    clean_names()
+```
+
+```{r}
+pcsk9i_regex <- c("evolocumab", "repatha", "alirocumab", "praluent") %>% 
+    paste("(\\b", ., "\\b)", sep = "") %>%
+    paste(collapse = "|")
+```
+
+```{r}
+pcsk9i_cprd <- product_codes %>% 
+    filter((dmdid %in% pcsk9i_cod$concept_id) | str_detect(str_to_lower(term_from_emis), pcsk9i_regex) | str_detect(str_to_lower(product_name), pcsk9i_regex) | str_detect(str_to_lower(drug_substance_name), pcsk9i_regex)) %>% 
+    arrange(desc(drug_issues))
+```
+
+```{r}
+#| eval: !expr write_init
+
+write_delim(pcsk9i_cprd, here("data", "codelists", "PCSK9I_COD_cprd.txt"))
+```
+
+
+## Inclisiran
+
+```{r}
+inclisiran_cod <- read_delim(here("data", "raw", "INCLISIRAN_COD.txt"), col_types = "cc") %>% 
+    clean_names()
+```
+
+```{r}
+inclisiran_regex <- c("inclisiran", "leqvio") %>% 
+    paste("(\\b", ., "\\b)", sep = "") %>%
+    paste(collapse = "|")
+```
+
+```{r}
+inclisiran_cprd <- product_codes %>% 
+    filter((dmdid %in% inclisiran_cod$concept_id) | str_detect(str_to_lower(term_from_emis), inclisiran_regex) | str_detect(str_to_lower(product_name), inclisiran_regex) | str_detect(str_to_lower(drug_substance_name), inclisiran_regex)) %>% 
+    arrange(desc(drug_issues))
+```
+
+```{r}
+#| eval: !expr write_init
+
+write_delim(inclisiran_cprd, here("data", "codelists", "INCLISIRAN_COD_cprd.txt"))
+```
+
+
+## Bempadoic acid
+
+```{r}
+bempacid_cod <- read_delim(here("data", "raw", "BEMPACID_COD.txt"), col_types = "cc") %>% 
+    clean_names()
+```
+
+```{r}
+bempacid_regex <- c("bempedoic", "nilemdo", "nustendi") %>% 
+    paste("(\\b", ., "\\b)", sep = "") %>%
+    paste(collapse = "|")
+```
+
+```{r}
+bempacid_cprd <- product_codes %>% 
+    filter((dmdid %in% bempacid_cod$concept_id) | str_detect(str_to_lower(term_from_emis), bempacid_regex) | str_detect(str_to_lower(product_name), bempacid_regex) | str_detect(str_to_lower(drug_substance_name), bempacid_regex)) %>% 
+    arrange(desc(drug_issues))
+```
+
+```{r}
+#| eval: !expr write_init
+
+write_delim(bempacid_cprd, here("data", "codelists", "BEMPACID_COD_cprd.txt"))
+```
+
+# After sorting
+
+```{r}
+concat_medcodeid <- function(df, filename) {
+    paste0(df$med_code_id, collapse = ", ") %>% 
+    as_tibble() %>% 
+    write_delim(here("data", "codelists", paste0(filename, "_cprd_plus_codes.txt")), col_names = F)
+}
+```
+
+## Lupus
+
+```{r}
+more_slupus_codes_sorted <- read_delim(here("data", "codelists", "slupus_codes_more_sorted.txt"), col_types = "cdccccccc") %>% 
+    clean_names() %>% 
+    filter(include != "n") %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    filter(observations > 10)
+```
+
+```{r}
+all_slupus <- bind_rows(slupus_cprd$SLUPUS_COD, more_slupus_codes_sorted) %>% 
+    filter(!is.na(med_code_id)) %>% 
+    mutate(comments = NA_character_,
+           category = "SLE",
+           cluster_id = if_else(is.na(cluster_id), "additional", cluster_id)) %>% 
+    arrange(desc(observations)) %>% 
+    select(cluster_id, cluster_description, snomed_code, snomed_code_description, pcd_refset_id, service_and_ruleset, med_code_id, observations, original_read_code, cleansed_read_code, term, snomed_ct_description_id, release, emis_code_category_id, include, comments, category)
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_slupus, here("data", "codelists", "SLUPUS_COD_cprd_plus.txt"))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+concat_medcodeid(all_slupus, "SLUPUS_COD")
+```
+
+## CVD risk assessment
+
+```{r}
+more_cvdriskass_codes_sorted <- read_delim(here("data", "codelists", "cvdriskass_codes_more_sorted.txt"), col_types = "cdcccccccc") %>% 
+    clean_names() %>% 
+    filter(include != "n") %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    filter(observations > 10)
+```
+
+```{r}
+all_cvdriskass <- bind_rows(cvdriskass_cprd$CVDRISKASS_COD, more_cvdriskass_codes_sorted) %>% 
+    filter(!is.na(med_code_id)) %>% 
+    mutate(category = "CVD risk assessment",
+           cluster_id = if_else(is.na(cluster_id), "additional", cluster_id)) %>% 
+    arrange(desc(observations))
+
+Encoding(all_cvdriskass$term) <- "UTF-8"
+
+all_cvdriskass$term <- iconv(all_cvdriskass$term, "UTF-8", "UTF-8", sub=' ')
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_cvdriskass, here("data", "codelists", "CVDRISKASS_COD_cprd_plus.txt"), quote = "all")
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+concat_medcodeid(all_cvdriskass, "CVDRISKASS")
+```
+
+## NHS health check
+
+```{r}
+nhs_hc_codes_sorted <- read_delim(here("data", "codelists", "nhs_health_check_codes_sorted.txt"), col_types = "cdcccccccc") %>% 
+    clean_names() %>% 
+    filter(include != "n") %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    arrange(desc(observations)) %>% 
+    mutate(cluster_id = "nhs_health_check",
+           cluster_description = NA_character_,
+           snomed_code = NA_character_,
+           snomed_code_description = NA_character_,
+           pcd_refset_id = NA_character_,
+           service_and_ruleset = NA_character_,
+           category = "NHS health check") %>% 
+    select(cluster_id, cluster_description, snomed_code, snomed_code_description, pcd_refset_id, service_and_ruleset, med_code_id, observations, original_read_code, cleansed_read_code, term, snomed_ct_description_id, release, emis_code_category_id, include, comments, category)
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(nhs_hc_codes_sorted, here("data", "codelists", "nhs_health_check_cprd_plus.txt"))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+concat_medcodeid(nhs_hc_codes_sorted, "nhs_health_check")
+```
+
+
+## Cholesterol
+
+```{r}
+more_chol_codes_sorted <- read_delim(here("data", "codelists", "cholesterol_codes_more_sorted.txt"), col_types = "cdcccccccc") %>% 
+    clean_names() %>% 
+    filter(include %in% c("finding", "intervention")) %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    filter(observations > 10)
+
+chol_cod_sorted <- read_delim(here("data", "codelists", "CHOL_COD_cprd_sorted.txt"), col_types = "cdcccccccc") %>% 
+    clean_names() %>% 
+    filter(include != "n") %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    left_join(refset %>% filter(cluster_id == "CHOL_COD"), by = "snomed_code") %>% 
+    select(cluster_id:service_and_ruleset, everything())
+```
+
+```{r}
+all_chol <- bind_rows(chol_cod_sorted, more_chol_codes_sorted) %>% 
+    filter(!is.na(med_code_id)) %>% 
+    mutate(category = "High cholesterol",
+           cluster_id = if_else(is.na(cluster_id), "additional", cluster_id)) %>% 
+    arrange(desc(observations)) %>% 
+    select(cluster_id, cluster_description, snomed_code, snomed_code_description, pcd_refset_id, service_and_ruleset, med_code_id, observations, original_read_code, cleansed_read_code, term, snomed_ct_description_id, release, emis_code_category_id, include, comments, category)
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_chol, here("data", "codelists", "high_cholesterol_cprd_plus.txt"))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+concat_medcodeid(all_chol, "high_cholesterol")
+```
+
+## Erectile dysfunction
+
+```{r}
+erectile_dysfunction_codes_sorted <- read_delim(here("data", "codelists", "erectile_dysfunction_codes_sorted.txt"), col_types = "cdcccccccc") %>% 
+    clean_names() %>% 
+    filter(include != "n") %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    mutate(cluster_id = "erectile_dysfunction",
+           cluster_description = NA_character_,
+           snomed_code = NA_character_,
+           snomed_code_description = NA_character_,
+           pcd_refset_id = NA_character_,
+           service_and_ruleset = NA_character_,
+           category = "Erectile dysfunction") %>% 
+    select(cluster_id, cluster_description, snomed_code, snomed_code_description, pcd_refset_id, service_and_ruleset, med_code_id, observations, original_read_code, cleansed_read_code, term, snomed_ct_description_id, release, emis_code_category_id, include, comments, category)
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(erectile_dysfunction_codes_sorted, here("data", "codelists", "erectile_dysfunction_cprd_plus.txt"))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+concat_medcodeid(erectile_dysfunction_codes_sorted, "erectile_dysfunction")
+```
+
+## Smoker
+
+```{r}
+more_smoker_codes_sorted <- read_delim(here("data", "codelists", "smoking_codes_more_sorted.txt"), col_types = "cdcccccccc") %>% 
+    clean_names() %>% 
+    filter(include != "n") %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    mutate(category = if_else(include == "Status", "Smoking status", "Current smoker")) %>% 
+    filter(observations > 10)
+```
+
+```{r}
+all_smok <- bind_rows(smoking_cprd$SMOK_COD, smoking_cprd$LSMOK_COD, more_smoker_codes_sorted) %>% 
+    filter(!is.na(med_code_id)) %>% 
+    mutate(category = case_when(cluster_id == "SMOK_COD" ~ "Smoking status",
+                                cluster_id == "LSMOK_COD" ~ "Current smoker",
+                                TRUE ~ category),
+           cluster_id = if_else(is.na(cluster_id), "additional", cluster_id)) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_smok, here("data", "codelists", "smoking_cprd_plus.txt"))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+concat_medcodeid(all_smok, "smoking")
+```
+
+## Obesity
+
+```{r}
+more_obesity_codes_sorted <- read_delim(here("data", "codelists", "obesity_codes_more_sorted.txt"), col_types = "cdcccccccc") %>% 
+    clean_names() %>% 
+    filter(include != "n") %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    mutate(category = if_else(include == "obese", "Obese", "Not obese")) %>% 
+    filter(observations > 10)
+    
+```
+
+```{r}
+all_obesity <- bind_rows(bind_rows(obesity_cprd), bind_rows(notobese_cprd), more_obesity_codes_sorted) %>% 
+    filter(!is.na(med_code_id),
+           med_code_id != "923861000006112") %>%
+    mutate(category = case_when(cluster_id %in% names(obesity_clusters) ~ "Obese",
+                                cluster_id %in% names(notobese_clusters) ~ "Not obese",
+                                TRUE ~ category),
+           cluster_id = if_else(is.na(cluster_id), "additional", cluster_id)) %>% 
+    arrange(desc(observations))
+
+all_bmival <- bmival_cprd %>% 
+    filter(!is.na(med_code_id)) %>%
+    bind_rows(more_obesity_codes_sorted %>% filter(med_code_id == "923861000006112")) %>% 
+    mutate(cluster_id = if_else(is.na(cluster_id), "additional", cluster_id),
+           include = NA_character_,
+           comments = NA_character_,
+           category = "BMI value") %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_obesity, here("data", "codelists", "obesity_cprd_plus.txt"))
+
+write_delim(all_bmival, here("data", "codelists", "bmival_cprd_plus.txt"))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+concat_medcodeid(all_obesity, "obesity")
+
+concat_medcodeid(all_bmival, "bmival")
+```
+
+## Hypertension
+
+```{r}
+more_hypertension_codes_sorted <- read_delim(here("data", "codelists", "hypertension_codes_more_sorted.txt"), col_types = "cdcccccccc") %>% 
+    clean_names() %>% 
+    filter(include != "n") %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    filter(observations > 10)
+```
+
+```{r}
+all_hypertension <- bind_rows(bind_rows(hyp_cprd), more_hypertension_codes_sorted) %>% 
+    filter(!is.na(med_code_id)) %>%
+    mutate(category = case_when(cluster_id == "HYPRES_COD" ~ "Hypertension resolved",
+                                TRUE ~ "Hypertension"),
+           cluster_id = if_else(is.na(cluster_id), "additional", cluster_id)) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_hypertension, here("data", "codelists", "hypertension_cprd_plus.txt"))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+concat_medcodeid(all_hypertension, "hypertension")
+```
+
+## Serious mental illness
+
+```{r}
+more_mh_codes_sorted <- read_delim(here("data", "codelists", "mh_codes_more_sorted.txt"), col_types = "cdcccccccc") %>% 
+    clean_names() %>% 
+    filter(include != "n") %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    filter(observations > 10)
+```
+
+```{r}
+all_mh <- bind_rows(mh_cprd$MH_COD, more_mh_codes_sorted) %>% 
+    filter(!is.na(med_code_id)) %>%
+    mutate(category = "Serious mental illness",
+           cluster_id = if_else(is.na(cluster_id), "additional", cluster_id)) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_mh, here("data", "codelists", "mh_cprd_plus.txt"))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+concat_medcodeid(all_mh, "mh")
+```
+
+## Rheumatoid arthritis
+
+```{r}
+more_rarth_codes_sorted <- read_delim(here("data", "codelists", "rarth_codes_more_sorted.txt"), col_types = "cdcccccccc") %>% 
+    clean_names() %>% 
+    filter(include != "n") %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    filter(observations > 10)
+```
+
+```{r}
+all_rarth <- bind_rows(rarth_cprd$RARTH_COD, more_rarth_codes_sorted) %>% 
+    filter(!is.na(med_code_id)) %>%
+    mutate(category = "Rheumatoid arthritis",
+           cluster_id = if_else(is.na(cluster_id), "additional", cluster_id)) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_rarth, here("data", "codelists", "rarth_cprd_plus.txt"))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+concat_medcodeid(all_rarth, "rarth")
+```
+
+## Atrial fibrillation
+
+```{r}
+more_afib_codes_sorted <- read_delim(here("data", "codelists", "afib_codes_more_sorted.txt"), col_types = "cdcccccccc") %>% 
+    clean_names() %>% 
+    filter(include != "n") %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    filter(observations > 10)
+```
+
+```{r}
+all_afib <- bind_rows(bind_rows(afib_cprd), more_afib_codes_sorted) %>% 
+    filter(!is.na(med_code_id)) %>%
+    mutate(category = case_when(cluster_id == "AFIBRES_COD" ~ "Atrial fibrillation resolved",
+                                TRUE ~ "Atrial fibrillation"),
+           cluster_id = if_else(is.na(cluster_id), "additional", cluster_id)) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_afib, here("data", "codelists", "afib_cprd_plus.txt"))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+concat_medcodeid(all_afib, "afib")
+```
+
+## CKD
+
+```{r}
+more_ckd_codes_sorted <- read_delim(here("data", "codelists", "ckd_codes_more_sorted.txt"), col_types = "cdcccccccc") %>% 
+    clean_names() %>% 
+    filter(include != "n") %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    filter(observations > 10)
+```
+
+```{r}
+all_ckd <- bind_rows(bind_rows(ckd_cprd), more_ckd_codes_sorted) %>% 
+    filter(!is.na(med_code_id)) %>%
+    mutate(category = case_when(cluster_id == "CKDRES_COD" ~ "CKD resolved",
+                                cluster_id == "CKD1AND2_COD" ~ "CKD stage 1 and 2",
+                                TRUE ~ "CKD stage 3 to 5"
+                                ),
+           cluster_id = if_else(is.na(cluster_id), "additional", cluster_id)) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_ckd, here("data", "codelists", "ckd_cprd_plus.txt"))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+concat_medcodeid(all_ckd, "ckd")
+```
+
+## CHD
+
+```{r}
+more_chd_codes_sorted <- read_delim(here("data", "codelists", "chd_codes_more_sorted.txt"), col_types = "cdcccccccc") %>% 
+    clean_names() %>% 
+    filter(include != "n") %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    filter(observations > 10)
+```
+
+```{r}
+all_chd <- bind_rows(chd_cprd$CHD_COD, more_chd_codes_sorted) %>% 
+    filter(!is.na(med_code_id)) %>%
+    mutate(category = "CHD",
+           cluster_id = if_else(is.na(cluster_id), "additional", cluster_id)) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_chd, here("data", "codelists", "chd_cprd_plus.txt"))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+concat_medcodeid(all_chd, "chd")
+```
+
+## PAD
+
+```{r}
+more_pad_codes_sorted <- read_delim(here("data", "codelists", "pad_codes_more_sorted.txt"), col_types = "cdcccccccc") %>% 
+    clean_names() %>% 
+    filter(include != "n") %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    filter(observations > 10)
+```
+
+```{r}
+all_pad <- bind_rows(pad_cprd$PAD_COD, more_pad_codes_sorted) %>% 
+    filter(!is.na(med_code_id)) %>%
+    mutate(category = "PAD",
+           cluster_id = if_else(is.na(cluster_id), "additional", cluster_id)) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_pad, here("data", "codelists", "pad_cprd_plus.txt"))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+concat_medcodeid(all_pad, "pad")
+```
+
+## TIA
+
+```{r}
+more_tia_codes_sorted <- read_delim(here("data", "codelists", "tia_codes_more_sorted.txt"), col_types = "cdcccccccc") %>% 
+    clean_names() %>% 
+    filter(include != "n") %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    filter(observations > 10)
+```
+
+```{r}
+all_tia <- bind_rows(tia_cprd$TIA_COD, more_tia_codes_sorted) %>% 
+    filter(!is.na(med_code_id)) %>%
+    mutate(category = "TIA",
+           cluster_id = if_else(is.na(cluster_id), "additional", cluster_id)) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_tia, here("data", "codelists", "tia_cprd_plus.txt"))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+concat_medcodeid(all_tia, "tia")
+```
+
+## Stroke
+
+```{r}
+more_strk_codes_sorted <- read_delim(here("data", "codelists", "strk_codes_more_sorted.txt"), col_types = "cdcccccccc") %>% 
+    clean_names() %>% 
+    filter(include != "n") %>% 
+    rename(snomed_code = snomed_ct_concept_id) %>% 
+    filter(observations > 10)
+```
+
+```{r}
+all_strk <- bind_rows(strk_cprd$STRK_MINUS_HSTRK_COD, strk_cprd$OSTR_COD, more_strk_codes_sorted) %>% 
+    filter(!is.na(med_code_id)) %>%
+    mutate(category = "Stroke",
+           cluster_id = if_else(is.na(cluster_id), "additional", cluster_id)) %>% 
+    arrange(desc(observations))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_strk, here("data", "codelists", "strk_cprd_plus.txt"))
+```
+
+```{r}
+#| eval: !expr write_compiled
+
+concat_medcodeid(all_strk, "strk")
+```
+
+## Diabetes
+
+```{r}
+all_t2dm <- bind_rows(diabetes_cprd$DMTYPE2AUDIT_COD, diabetes_cprd$DMRES_COD) %>% 
+    mutate(include = NA_character_, 
+           comments = NA_character_,
+           category = case_when(cluster_id == "DMTYPE2AUDIT_COD" ~ "Type 2 diabetes",
+                                cluster_id == "DMRES_COD" ~ "Diabetes resolved"),
+           cluster_id = if_else(is.na(cluster_id), "additional", cluster_id)) %>% 
+    filter(!is.na(med_code_id))
+
+write_delim(all_t2dm, here("data", "codelists", "t2dm_cprd_plus.txt"))
+
+concat_medcodeid(all_t2dm, "t2dm")
+```
+
+```{r}
+all_t1dm <- diabetes_cprd$DMTYPE1AUDIT_COD %>% 
+    filter(!is.na(med_code_id)) %>% 
+    mutate(include = NA_character_, 
+           comments = NA_character_,
+           category = "Type 1 diabetes",
+           cluster_id = if_else(is.na(cluster_id), "additional", cluster_id))
+```
+
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_t1dm, here("data", "codelists", "t1dm_cprd_plus.txt"))
+
+concat_medcodeid(all_t1dm, "t1dm")
+```
+
+## Familial hypercholesterolaemia
+
+```{r}
+all_fhyp <- fhyp_cprd$FHYP_COD %>% 
+    filter(!is.na(med_code_id)) %>% 
+    mutate(include = NA_character_, 
+           comments = NA_character_,
+           category = "Familial hypercholesterolaemia")
+```
+
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_fhyp, here("data", "codelists", "fhyp_cprd_plus.txt"))
+
+concat_medcodeid(all_fhyp, "fhyp")
+```
+
+
+## Lipid lowering therapies
+
+```{r}
+all_llt <- bind_rows(stat_cprd, ezetimibe_cprd, bempacid_cprd, pcsk9i_cprd, inclisiran_cprd)
+```
+
+
+```{r}
+#| eval: !expr write_compiled
+
+write_delim(all_llt, here("data", "codelists", "llt_cprd_plus.txt"))
+
+paste0(all_llt$prod_code_id, collapse = ", ") %>% 
+    as_tibble() %>% 
+    write_delim(here("data", "codelists", "llt_cprd_plus_codes.txt"), col_names = F)
+```

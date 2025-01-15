@@ -1,0 +1,210 @@
+---
+title: "CVD risk assessment indicators"
+format: html
+---
+
+## Limitations
+
+- Do not have full birth date, only birth year so age is approximated
+- As in QOF, including all people registered at end date, not just people registered for full 3/5 year preceding period. So some individuals will not have been registered for very long
+- Smoking and obesity values could be very dated
+
+
+## Draft study population
+
+- All practices are in England for Dec 2023 CPRD Aurum
+- Acceptable patients only
+
+
+Current smoker - the most recent smoking habit code (SMOK_COD) on or before the end date is a current smoking code (LSMOK_COD). 
+
+Obesity – any record of BMI 30 or greater (BMI30_COD, a finding - no associated BMI value), BMI being obese (BMIOBESE_COD), BMI 40 or greater (LBMI40_COD, a finding – no associated BMI value), not succeeded by a code for BMI being healthy (BMIHEALTHY_COD), overweight (BMIOVER_COD) or under (BMIUNDER_COD) before the start date; or the most recent BMI value recording (BMIVAL_COD) on or before the end date having a value of 30 or greater. 
+
+Hypertension – any record of hypertension (HYP_COD), not followed by code for hypertension resolved (HYP_RES), on or before the end date. 
+
+Hypercholesterolaemia – any record for finding of high cholesterol (NONVALCHOL_COD_high) the start date, or the most recent record of total cholesterol (CHOL2_COD) being 5mmol/L or higher, LDL cholesterol (LDLCCHOL_COD) of 3mmol/L or higher, non-HDL cholesterol (NONHDLCCHOL_COD) of 4mmol/L or higher, or HDL cholesterol (HDLCCHOL_COD) of 1.0mmol or lower for men and 1.2mmol or lower for women, on or before the end date. 
+
+ 
+
+For IND2023-166, the start date, end date and study population are the same as for IND2023-165 except individuals with any of the following are also included: 
+
+Type 2 diabetes – any record of type 2 diabetes (DMTYPE2AUDIT_COD), with no subsequent diabetes resolved code, on or before the end date. 
+
+Erectile dysfunction 
+
+Serious mental illness - any record of psychosis, schizophrenia or bipolar affective disorder (MH_COD) on or before the end date. 
+
+Rheumatoid arthritis - any record of rheumatoid arthritis (RARTH_COD) before 1st April 2020. 
+
+Systemic lupus erythematosus - any record of systemic lupus erythematosus (SLUPUS_COD) on or before the end date. 
+
+Atrial fibrillation – any record of atrial fibrillation (AFIB_COD), with no subsequent atrial fibrillation resolved code (AFIBRES_COD), on or before the end date. 
+
+ 
+
+For all three indicators, any patients who meet the following criteria will be excluded from the study population: 
+
+Type 1 diabetes – any record of type 1 diabetes (DMTYPE1AUDIT_COD) before the start date. 
+
+CVD – any record of coronary heart disease (CHD_COD), stroke excluding haemorrhagic stroke (OSTR_COD and STRK_COD, minus HSTRK_COD), transient ischaemic attack (TIA_COD) or peripheral arterial disease (PAD_COD) on or before the end date. 
+
+Familial hypercholesterolaemia - any record of familial hypercholesterolaemia (FHYP_COD) on or before the end date. 
+
+CKD stage 3a to 5 – any record of CKD stage 3 to 5 (CKD_COD), with no subsequent code for CKD resolved (CKDRES_COD) or CKD stage 1 to 2 (CKD1AND2_COD), on or before the end date. 
+
+Current lipid lowering therapy – any drug issue record of statins (STAT_COD), ezetimibe (EZETIMIBE_COD), PCSK9 inhibitors (PCSK9I_COD), inclisiran (INCLISIRAN_COD) or bempedoic acid (BEMPACID_COD) in the 6-month period before the end date. 
+
+QRISK score of 20% – any record of QRISK score (QRISK_COD) of 20% on or before the end date. 
+
+## Cholesterol
+
+- Findings only
+- Also including list of interventions which show high cholesterol likely - e.g. low cholesterol diet
+
+## NHS health check
+
+- Excluding codes for NHS Health Check annual review
+- Included code for NHS Health Check care plan
+
+## CVD risk assessment
+
+- Check if should use codes specifying patient as unsuitable for QRISK2, QRISK3 etc to exclude patients
+- Could also look at where CVD risk assessments are declined
+- Check if should include ASSIGN codes? Tool used in Scotland. Have included for now
+
+1. Restrict to where obstype is value, observation, document, investigation only (exclude referral, allergy, family history)
+1. Filter for CVD risk assessment records between 2018-04-01 and 2023-03-31
+1. Keep most recent record per patient
+
+### Exclusions
+
+#### Previous CVD risk assessment score of 20% or more
+
+Previous CVD risk assessment score of 20% or more – any record of a CVD risk assessment (QRISK, QRISK2, QRISK3, Joint British Societies, Framingham, ASSIGN) where the 10-year CVD risk score is 20% or more, before the start date (1st April 2020 for IND2023-164, 1st April 2018 for IND2023-165 and IND2023-166)
+
+1. Drop records after 31/03/2023 and those not for the cohort
+1. Ignore values where units are in years or year, for heart age. Include all other units, even if they are 
+1. Ignore medcodeids for 5 year score and heart age
+1. Kept records where value is between 20 and 100 (inclusive)
+
+## Systemic lupus erythematosus
+
+## Atrial fibrillation
+
+- Include codes for atrial flutter, which is different
+- Include codes for AF monitoring
+- Exclude those with subsequent AF resolved code
+
+## Obesity
+
+- Not looking at height and weight to calculate BMI
+- Ignore BMI centile as used for children and teens
+- Ignoring obesity resolved??
+
+### Obesity category code
+
+- One additional code for BMI was included, "Body mass index" (923861000006112). Reload in excluding those records
+    - Those records were loaded into the bmival define table
+- Drop records that were from before 1st Jan 1995
+
+### BMI value
+
+- Drop records with NA for value
+- Drop records with unrealistic BMI values in the extremes (below 10 or above 70)
+- Drop records that were from before 1st Jan 1995
+
+## Erectile dysfunction
+
+- Include delayed erection (<10 instances)
+
+## Smoking status
+
+- Found additional codes and kept in define but dropped those for smoking status and intervention (smoking cessation related)
+    - Investigate what values are under the smoking status code 137811000006119 (all NAs) and the total time smoked code 342574011.
+- Ignore e-cigs for now
+
+## Hypertension
+
+- Keep latest record across HYP_COD, HYPRES_COD, additional codes. Drop if it's HYPRES_COD
+- Exclude gestational hypertension
+- Include codes on hypertension monitoring and treatment, not just diagnosis?
+
+## SMI
+
+- Include history of
+- Include code for resolved and in remission
+- Include symptoms - delusion
+- Exclude organic psychosis and organic delusional disorders - "Organic psychoses are characterized by abnormal brain function that is caused by a known physical abnormality, which in most cases is some organic disease of the brain."
+- Exclude hypomania and manic mood
+- Exclude delusions or psychosis due to dementia
+
+## Type 1 and type 2 diabetes
+
+- No additional codes to add
+
+## Rheumatoid arthritis
+
+- Include monitoring codes
+- Exclude post-rheumatic arthropathy
+- Included rheumatoid arthritis resolved and in remission
+- Exclude disease scores
+
+## Familial hypercholesterolaemia
+
+- Codelist from PCD refset includes possible, probable and suspected fhyp. Exclude if latest FHYP_COD record is suspected and possible following CKS
+    - "Make a clinical diagnosis of FH in people who meet the Simon Broome criteria for 'possible' or 'definite' FH, or have a DLCN score greater than 5."
+    - DLCN stratification based on total score: 'Definite' FH	> 8; 'Probable' FH	6–8; 'Possible' FH	3–5; 'Unlikely' FH	< 3
+    - Specific codes:
+        - 1659061000000112 Possible familial hypercholesterolaemia
+        - 7483481000006112 Possible familial hypercholesterolemia
+        - 8192861000006119 Possible heterozygous familial hypercholesterolaemia
+        - 7510431000006112 Suspected heterozygous familial hypercholesterolaemia
+- Ignore codes about test results - not looking at values for those
+
+## CHD
+
+- Ignore codes with 10 or less uses
+- Later excluded additional codes:
+    - 4095881000006114 Removal of stent
+    - 358121000000115 Endovascular placement of stent
+
+## Stroke, non-haemorrhagic
+
+- Separated extra codes into "general" stroke category
+- Exclude suspected
+- Accidentally included 857471000006118 No H/O: CVA/stroke in codelist, dropped when importing
+
+## TIA
+
+- Exclude suspected
+- Exclude referral
+
+## PAD
+
+## IMD linkage
+
+- 2019 IMD composite
+- Most of cohort eligible for LSOA linkage
+    - 73.75% of 43-84 cohort
+    - 73.99% of 45-84 cohort
+- Restricted to patients in practices in England. Practice must have consented to patient-level linkage
+- Patient has no record of dissent to NHSD transmission of confidential data
+- Full postcode of residence recorded in primary care data for patient, in valid format
+- Provided as quintiles
+- No new linked data has been added since Jan 2022 due to NHSD rebuilding its systems and reorganising - Jan 2022 eligibility file is the latest version
+- Nobody who joined Aurum since then is eligible for linkage
+- Some people will have opted out
+- Date of linkage is 2021-04-05 for all individuals - this may have changed by March 2023
+- "Uses the most recent patient postcode available in the GP record, so it is 
+not possible to assign deprivation metrics based on where a patient might have lived at some fixed time 
+prior"
+
+### Feasibility study steps
+
+Proportion of people aged 43 to 84 at 2023-03-31 with systemic lupus erythematosus who have a recorded CVD risk assessment score in the preceding 3 years. Not excluding those with any of the exclusion factors.
+
+1. Restrict to observation records only
+1. Calculate aged 43 to 84 at 2023-03-31
+1. Filter for people registered on 2023-03-31 (reg end date is after 2023-03-31)
+1. Drop records from practices which have merged
+1. Keep only most recent record per patient
